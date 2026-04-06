@@ -1,0 +1,64 @@
+{
+  "plugins": [
+    {
+      "id": "pixpin",
+      "name": "PixPin",
+      "description": "Portable screenshot, pin, long capture, and OCR workflow.",
+      "category": "Capture",
+      "executable": "PixPin/PixPin.exe",
+      "homepage": "https://pixpinapp.com/",
+      "requiresAdmin": false,
+      "tags": ["screenshot", "ocr", "pin"]
+    },
+    {
+      "id": "snipaste",
+      "name": "Snipaste",
+      "description": "Lightweight screenshot and pinning tool.",
+      "category": "Capture",
+      "executable": "Snipaste/Snipaste.exe",
+      "homepage": "https://www.snipaste.com/",
+      "requiresAdmin": false,
+      "tags": ["screenshot", "pin"]
+    },
+    {
+      "id": "context-menu-manager",
+      "name": "ContextMenuManager",
+      "description": "Manage Windows right-click menu entries.",
+      "category": "System",
+      "executable": "ContextMenuManager/ContextMenuManager.exe",
+      "homepage": "https://github.com/BluePointLilac/ContextMenuManager",
+      "requiresAdmin": false,
+      "tags": ["context-menu"]
+    },
+    {
+      "id": "file-converter",
+      "name": "FileConverter",
+      "description": "Right-click conversion helper for many file formats.",
+      "category": "Advanced",
+      "executable": "FileConverter/FileConverter.exe",
+      "homepage": "https://github.com/Tichau/FileConverter",
+      "requiresAdmin": false,
+      "tags": ["convert", "context-menu"]
+    },
+    {
+      "id": "clash-verge-rev",
+      "name": "Clash Verge Rev",
+      "description": "Proxy client placeholder for later one-click deployment.",
+      "category": "Advanced",
+      "executable": "clash-verge-rev/clash-verge.exe",
+      "homepage": "https://github.com/clash-verge-rev/clash-verge-rev",
+      "requiresAdmin": false,
+      "tags": ["proxy", "network"]
+    },
+    {
+      "id": "explorer-blur-mica",
+      "name": "ExplorerBlurMica",
+      "description": "Explorer blur and mica enhancement entry.",
+      "category": "Advanced",
+      "executable": "ExplorerBlurMica/ExplorerBlurMica.exe",
+      "homepage": "https://github.com/Maplespe/ExplorerBlurMica",
+      "requiresAdmin": true,
+      "tags": ["explorer", "mica"]
+    }
+  ]
+}
