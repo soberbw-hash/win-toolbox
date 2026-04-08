@@ -1,8 +1,8 @@
 {
   "name": "win-toolbox",
   "private": true,
-  "version": "0.1.0",
-  "description": "A minimal Windows system toolbox built with Tauri, React, and TypeScript.",
+  "version": "1.0.0",
+  "description": "给中国用户做的极简 Windows 系统工具箱，内置截图、清理、修复、创作者缓存和本地 AI 面板。",
   "type": "module",
   "scripts": {
     "dev": "vite",

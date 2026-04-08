@@ -6,51 +6,51 @@ export function getAiAssessment(snapshot: SystemSnapshot | null): AiAssessment {
 
   if (vramMb >= 10000 && ramMb >= 32768) {
     return {
-      tier: "Strong local AI host",
-      headline: "7B to 14B quantized models are realistic here.",
-      models: ["Qwen 7B Q4_K_M", "Qwen 14B Q4 for selective workloads"],
-      runtime: "Portable Ollama with model idle shutdown",
+      tier: "本地 AI 强机位",
+      headline: "7B 到 14B 量化模型都有不错的操作空间。",
+      models: ["Qwen 7B Q4_K_M", "Qwen 14B Q4（按需使用）"],
+      runtime: "便携版 Ollama + 空闲自动休眠",
       notes: [
-        "You have enough headroom for serious local assistant workflows.",
-        "Still add process cleanup so idle AI does not eat VRAM forever.",
+        "这类机器完全值得做本地大模型部署，而且能真正形成生产力。",
+        "即使配置够强，也建议做显存占用回收和闲置进程清理。",
       ],
     };
   }
 
   if (vramMb >= 7000 && ramMb >= 24576) {
     return {
-      tier: "Balanced local AI host",
-      headline: "7B class quantized models should be the sweet spot.",
-      models: ["Qwen 7B Q4_K_M", "Qwen 4B for lower power sessions"],
-      runtime: "Ollama with explicit start and stop controls",
+      tier: "本地 AI 均衡机位",
+      headline: "7B 量化模型会是最舒服的甜点区。",
+      models: ["Qwen 7B Q4_K_M", "Qwen 4B 轻负载常驻"],
+      runtime: "Ollama 本地运行 + 显式启停控制",
       notes: [
-        "Great fit for a one-click local deploy MVP.",
-        "Favor lightweight defaults and make larger models opt-in.",
+        "这类机器特别适合做“一键部署 + 用完即走”的本地 AI 方案。",
+        "默认用轻量模型，重模型不要默认常驻，这是体验上限的关键。",
       ],
     };
   }
 
   if (vramMb >= 4000 && ramMb >= 16384) {
     return {
-      tier: "Lightweight local AI host",
-      headline: "4B and 1.8B models are the practical default.",
-      models: ["Qwen 4B quantized", "Qwen 1.8B for low-latency tasks"],
-      runtime: "Ollama with strict idle shutdown",
+      tier: "本地 AI 轻量机位",
+      headline: "4B 和 1.8B 是最现实、也最稳妥的选择。",
+      models: ["Qwen 4B 量化版", "Qwen 1.8B 低延迟方案"],
+      runtime: "Ollama + 强制空闲回收",
       notes: [
-        "Your machine can still run useful local AI if defaults stay disciplined.",
-        "Avoid pretending that bigger models will feel smooth.",
+        "机器依然可以跑本地 AI，但默认策略必须克制，不能一上来就贪大。",
+        "把体验做顺，比参数表好看更重要。",
       ],
     };
   }
 
   return {
-    tier: "Entry local AI host",
-    headline: "Start with 0.5B to 1.8B models or CPU-first experiments.",
+    tier: "本地 AI 入门机位",
+    headline: "建议从 0.5B 到 1.8B 开始，先把场景跑通。",
     models: ["Qwen 0.5B", "Qwen 1.8B"],
-    runtime: "Portable runtime with aggressive resource release",
+    runtime: "便携运行时 + 激进资源释放",
     notes: [
-      "Protect system responsiveness first and chase bigger models later.",
-      "Hardware evaluation is more valuable than automatic downloads at this tier.",
+      "这类机器更需要的是硬件评估和轻量策略，而不是盲目自动下载大模型。",
+      "先保证电脑不卡，再谈本地 AI 的高级玩法。",
     ],
   };
 }

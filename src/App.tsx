@@ -1,6 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getAiAssessment } from "./ai";
+import { AiPalette } from "./AiPalette";
+import { BossModeOverlay } from "./BossModeOverlay";
+import { CreatorCachePanel } from "./CreatorCachePanel";
+import { DonatePanel } from "./DonatePanel";
+import { StorageHotspotsPanel } from "./StorageHotspotsPanel";
 import {
   dashboardActionIds,
   roadmap,
@@ -9,85 +15,90 @@ import {
   sections,
   toolDefinitions,
 } from "./content";
+import { getBossModeViewState } from "./fakeUpdate";
+import { formatDuration, formatMemory, formatRelativeTime } from "./format";
 import type {
   ActionId,
+  AiChatResponse,
+  AiRuntimeStatus,
+  BossModeViewState,
+  CreatorCacheTarget,
   PluginManifest,
   SectionId,
+  StorageHotspot,
   SystemSnapshot,
   ToolActionResult,
 } from "./types";
 import "./App.css";
 
-function formatMemory(mb: number | null | undefined) {
-  if (!mb) {
-    return "Not detected";
-  }
-
-  const gb = mb / 1024;
-  return gb >= 10 ? `${gb.toFixed(0)} GB` : `${gb.toFixed(1)} GB`;
-}
-
-function formatRelativeTime(iso: string | null | undefined) {
-  if (!iso) {
-    return "Not refreshed yet";
-  }
-
-  const diff = Date.now() - new Date(iso).getTime();
-  const seconds = Math.max(Math.round(diff / 1000), 0);
-
-  if (seconds < 60) {
-    return `${seconds}s ago`;
-  }
-
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) {
-    return `${minutes}m ago`;
-  }
-
-  return `${Math.round(minutes / 60)}h ago`;
-}
-
-function formatDuration(durationMs: number | null | undefined) {
-  if (!durationMs) {
-    return "instant";
-  }
-
-  return durationMs < 1000 ? `${durationMs} ms` : `${(durationMs / 1000).toFixed(1)} s`;
-}
+type ToastState = { message: string; tone: "info" | "error" } | null;
 
 function App() {
   const [activeSection, setActiveSection] = useState<SectionId>("dashboard");
   const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null);
   const [plugins, setPlugins] = useState<PluginManifest[]>([]);
+  const [creatorCaches, setCreatorCaches] = useState<CreatorCacheTarget[]>([]);
+  const [hotspots, setHotspots] = useState<StorageHotspot[]>([]);
+  const [aiRuntime, setAiRuntime] = useState<AiRuntimeStatus | null>(null);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiResponse, setAiResponse] = useState<AiChatResponse | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [bossMode, setBossMode] = useState(false);
+  const [bossStartedAt, setBossStartedAt] = useState(0);
+  const [bossState, setBossState] = useState<BossModeViewState>(getBossModeViewState(0));
+  const [lastResult, setLastResult] = useState<ToolActionResult | null>(null);
+  const [runningActionId, setRunningActionId] = useState<string | null>(null);
   const [snapshotError, setSnapshotError] = useState("");
   const [pluginError, setPluginError] = useState("");
-  const [lastResult, setLastResult] = useState<ToolActionResult | null>(null);
-  const [refreshingSnapshot, setRefreshingSnapshot] = useState(false);
-  const [refreshingPlugins, setRefreshingPlugins] = useState(false);
-  const [runningActionId, setRunningActionId] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState>(null);
+  const [charged, setCharged] = useState(false);
+
+  const activeSectionInfo = sectionCatalog[activeSection];
+  const aiAssessment = getAiAssessment(snapshot);
+  const installedPlugins = plugins.filter((plugin) => plugin.installed);
+  const screenshotProvider = installedPlugins.find((plugin) => plugin.tags.includes("screenshot"));
+  const dashboardActions = dashboardActionIds.flatMap((id) =>
+    toolDefinitions.find((tool) => tool.id === id) ?? [],
+  );
+
+  function pushToast(message: string, tone: "info" | "error" = "info") {
+    setToast({ message, tone });
+    window.setTimeout(() => setToast(null), 2800);
+  }
 
   async function loadSnapshot() {
     try {
-      setRefreshingSnapshot(true);
       setSnapshotError("");
       setSnapshot(await invoke<SystemSnapshot>("get_system_snapshot"));
     } catch (error) {
       setSnapshotError(String(error));
-    } finally {
-      setRefreshingSnapshot(false);
     }
   }
 
   async function loadPlugins() {
     try {
-      setRefreshingPlugins(true);
       setPluginError("");
       setPlugins(await invoke<PluginManifest[]>("list_plugins"));
     } catch (error) {
       setPluginError(String(error));
-    } finally {
-      setRefreshingPlugins(false);
     }
+  }
+
+  async function loadCreatorCaches() {
+    setCreatorCaches(await invoke<CreatorCacheTarget[]>("scan_creator_caches"));
+  }
+
+  async function loadHotspots() {
+    setHotspots(await invoke<StorageHotspot[]>("scan_storage_hotspots"));
+  }
+
+  async function loadAiRuntime() {
+    setAiRuntime(await invoke<AiRuntimeStatus>("get_ai_runtime_status"));
+  }
+
+  async function refreshAll() {
+    await Promise.all([loadSnapshot(), loadPlugins(), loadCreatorCaches(), loadHotspots(), loadAiRuntime()]);
   }
 
   async function runAction(actionId: ActionId) {
@@ -95,361 +106,224 @@ function App() {
       setRunningActionId(actionId);
       const result = await invoke<ToolActionResult>("run_tool_action", { actionId });
       setLastResult(result);
+      pushToast(result.summary, result.success ? "info" : "error");
 
-      if (actionId === "one_click_clean") {
-        void loadSnapshot();
+      if (["one_click_clean", "creator_deep_clean_all"].includes(actionId)) {
+        await Promise.all([loadSnapshot(), loadCreatorCaches(), loadHotspots()]);
       }
 
       if (actionId === "open_plugin_folder") {
-        void loadPlugins();
+        await loadPlugins();
       }
     } catch (error) {
+      const message = String(error);
+      pushToast(message, "error");
       setLastResult({
         actionId,
-        title: "Action Error",
+        title: "操作失败",
         success: false,
-        summary: "The action failed before it returned a result.",
-        details: String(error),
+        summary: "动作执行前就中断了。",
+        details: message,
         durationMs: 0,
         warnings: [],
       });
+    } finally {
+      setRunningActionId(null);
+    }
+  }
+
+  async function cleanCreatorCache(cacheId: string) {
+    try {
+      setRunningActionId(cacheId);
+      const result = await invoke<ToolActionResult>("clean_creator_cache", { cacheId });
+      setLastResult(result);
+      pushToast(result.summary, result.success ? "info" : "error");
+      await Promise.all([loadCreatorCaches(), loadHotspots()]);
     } finally {
       setRunningActionId(null);
     }
   }
 
   async function launchPlugin(pluginId: string) {
-    try {
-      setRunningActionId(pluginId);
-      setLastResult(await invoke<ToolActionResult>("launch_plugin", { pluginId }));
-    } catch (error) {
-      setLastResult({
-        actionId: pluginId,
-        title: "Plugin Error",
-        success: false,
-        summary: "The plugin launch failed.",
-        details: String(error),
-        durationMs: 0,
-        warnings: [],
-      });
-    } finally {
-      setRunningActionId(null);
-    }
+    setRunningActionId(pluginId);
+    const result = await invoke<ToolActionResult>("launch_plugin", { pluginId });
+    setLastResult(result);
+    setRunningActionId(null);
   }
 
   async function openTarget(target: string) {
+    await invoke<ToolActionResult>("open_target", { target });
+  }
+
+  async function askLocalAi() {
+    if (!aiPrompt.trim()) {
+      pushToast("先输入一句话，再让本地 AI 帮你发力。", "error");
+      return;
+    }
+
     try {
-      setRunningActionId(target);
-      setLastResult(await invoke<ToolActionResult>("open_target", { target }));
+      setAiBusy(true);
+      const response = await invoke<AiChatResponse>("ask_local_ai", { prompt: aiPrompt, model: null });
+      setAiResponse(response);
+      pushToast("本地 AI 已返回结果。");
     } catch (error) {
-      setLastResult({
-        actionId: "open_target",
-        title: "Open Target Error",
-        success: false,
-        summary: "The target could not be opened.",
-        details: String(error),
-        durationMs: 0,
-        warnings: [],
-      });
+      pushToast(String(error), "error");
     } finally {
-      setRunningActionId(null);
+      setAiBusy(false);
     }
   }
 
+  async function enterBossMode() {
+    const appWindow = getCurrentWindow();
+    setBossStartedAt(Date.now());
+    setBossState(getBossModeViewState(0));
+    setBossMode(true);
+    setPaletteOpen(false);
+    await Promise.all([
+      appWindow.setAlwaysOnTop(true),
+      appWindow.setFullscreen(true),
+      appWindow.setDecorations(false),
+      appWindow.setResizable(false),
+      appWindow.setCursorVisible(false),
+      appWindow.setContentProtected(true),
+    ]);
+  }
+
+  async function exitBossMode() {
+    const appWindow = getCurrentWindow();
+    setBossMode(false);
+    await Promise.all([
+      appWindow.setAlwaysOnTop(false),
+      appWindow.setFullscreen(false),
+      appWindow.setDecorations(true),
+      appWindow.setResizable(true),
+      appWindow.setCursorVisible(true),
+      appWindow.setContentProtected(false),
+    ]);
+  }
+
   useEffect(() => {
-    void loadSnapshot();
-    void loadPlugins();
-
-    const timer = window.setInterval(() => {
-      void loadSnapshot();
-    }, 30_000);
-
+    void refreshAll();
+    const timer = window.setInterval(() => void loadSnapshot(), 30_000);
     return () => window.clearInterval(timer);
   }, []);
 
-  const installedPlugins = plugins.filter((plugin) => plugin.installed);
-  const screenshotProvider = installedPlugins.find((plugin) =>
-    plugin.tags.some((tag) => tag === "screenshot"),
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey && event.code === "Space" && aiRuntime?.paletteReady && !bossMode) {
+        event.preventDefault();
+        setPaletteOpen((value) => !value);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [aiRuntime, bossMode]);
+
+  useEffect(() => {
+    if (!bossMode) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setBossState(getBossModeViewState(Date.now() - bossStartedAt));
+    }, 250);
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.altKey && event.shiftKey && event.key.toLowerCase() === "u") {
+        event.preventDefault();
+        void exitBossMode();
+        return;
+      }
+
+      if (["Escape", "Meta", "ContextMenu"].includes(event.key)) {
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [bossMode, bossStartedAt]);
+
+  const signalCards = useMemo(
+    () => [
+      {
+        label: "CPU",
+        value: snapshot?.cpuName ?? "正在读取处理器信息",
+        meta: snapshot ? `${snapshot.cpuLoad}% 负载 · ${snapshot.cpuCores} 核 / ${snapshot.logicalCores} 线程` : "每 30 秒自动刷新一次",
+        progress: snapshot?.cpuLoad ?? 12,
+      },
+      {
+        label: "内存",
+        value: snapshot ? `${formatMemory(snapshot.memoryUsedMb)} / ${formatMemory(snapshot.memoryTotalMb)}` : "正在读取物理内存",
+        meta: snapshot ? `${snapshot.memoryUsagePercent}% 已使用` : "适合判断清理和 AI 档位",
+        progress: snapshot?.memoryUsagePercent ?? 28,
+      },
+      {
+        label: "显卡",
+        value: snapshot?.gpuName ?? "正在读取显卡信息",
+        meta: snapshot?.gpuMemoryMb ? `${formatMemory(snapshot.gpuMemoryMb)} 显存已检测` : "未识别时将走保守判断",
+        progress: snapshot?.gpuMemoryMb ? Math.min((snapshot.gpuMemoryMb / 12288) * 100, 100) : 18,
+      },
+      {
+        label: "网络",
+        value: snapshot?.networkName ?? "未发现活动网卡",
+        meta: snapshot?.networkLinkSpeed ?? "等待主网卡链路信息",
+        progress: snapshot?.networkName ? 70 : 8,
+      },
+    ],
+    [snapshot],
   );
-  const aiAssessment = getAiAssessment(snapshot);
-  const activeSectionInfo = sectionCatalog[activeSection];
-
-  const signalCards = [
-    {
-      label: "CPU",
-      value: snapshot?.cpuName ?? "Reading processor information",
-      meta: snapshot
-        ? `${snapshot.cpuLoad}% load · ${snapshot.cpuCores} cores / ${snapshot.logicalCores} threads`
-        : "Refreshes automatically every 30 seconds",
-      progress: snapshot?.cpuLoad ?? 10,
-    },
-    {
-      label: "Memory",
-      value: snapshot
-        ? `${formatMemory(snapshot.memoryUsedMb)} / ${formatMemory(snapshot.memoryTotalMb)}`
-        : "Reading physical memory",
-      meta: snapshot ? `${snapshot.memoryUsagePercent}% in use` : "Useful for cleanup and AI sizing",
-      progress: snapshot?.memoryUsagePercent ?? 24,
-    },
-    {
-      label: "GPU",
-      value: snapshot?.gpuName ?? "Reading graphics adapter",
-      meta: snapshot?.gpuMemoryMb
-        ? `${formatMemory(snapshot.gpuMemoryMb)} VRAM detected`
-        : "Fallback detection is active",
-      progress: snapshot?.gpuMemoryMb ? Math.min((snapshot.gpuMemoryMb / 12288) * 100, 100) : 20,
-    },
-    {
-      label: "Network",
-      value: snapshot?.networkName ?? "No active adapter",
-      meta: snapshot?.networkLinkSpeed ?? "Waiting for primary adapter",
-      progress: snapshot?.networkName ? 68 : 12,
-    },
-  ];
-
-  const dashboardActions = dashboardActionIds
-    .map((id) => toolDefinitions.find((tool) => tool.id === id))
-    .filter(Boolean);
 
   return (
-    <div className="shell">
-      <div className="shell__background shell__background--aurora" />
-      <div className="shell__background shell__background--grid" />
+    <>
+      <div className="shell">
+        <div className="shell__background shell__background--aurora" />
+        <div className="shell__background shell__background--grid" />
 
-      <aside className="sidebar panel">
-        <div className="brand">
-          <div className="brand__badge">WT</div>
-          <div>
-            <p className="eyebrow">Win Toolbox</p>
-            <h1>Minimal Windows Toolbox</h1>
-          </div>
-        </div>
+        <aside className="sidebar panel">
+          <div className="brand"><div className="brand__badge">WT</div><div><p className="eyebrow">Win Toolbox</p><h1>为中国用户做的极简 Windows 工具箱</h1></div></div>
+          <p className="sidebar__summary">不是堆按钮，而是把截图、清理、修复、创作者缓存、本地 AI 和客户演示感，压进一个干净的 Fluent 界面里。</p>
+          <nav className="nav">{sections.map((section) => <button key={section.id} className={`nav__button ${section.id === activeSection ? "nav__button--active" : ""}`} type="button" onClick={() => setActiveSection(section.id)}><span>{section.label}</span><small>{section.hint}</small></button>)}</nav>
+          <div className="sidebar__footnote card"><p className="eyebrow">演示亮点</p><h2>真功能，不是空壳</h2><p>系统状态、截图、清理、DISM、驱动备份、创作者缓存、空间透视、插件扫描和本地 AI 面板都能直接跑起来。</p></div>
+        </aside>
 
-        <p className="sidebar__summary">
-          Main app as the entry point. Real actions first. Plugin growth second. Heavy system tuning only when safety rails are ready.
-        </p>
-
-        <nav className="nav">
-          {sections.map((section) => (
-            <button
-              key={section.id}
-              className={`nav__button ${section.id === activeSection ? "nav__button--active" : ""}`}
-              type="button"
-              onClick={() => setActiveSection(section.id)}
-            >
-              <span>{section.label}</span>
-              <small>{section.hint}</small>
-            </button>
-          ))}
-        </nav>
-
-        <div className="sidebar__footnote card">
-          <p className="eyebrow">Current Status</p>
-          <h2>Usable MVP</h2>
-          <p>Snapshot refresh, cleanup, capture launch, DISM checks, driver export, plugin scanning, and AI sizing are all wired in.</p>
-        </div>
-      </aside>
-
-      <main className="workspace">
-        <section className="hero panel">
-          <div className="hero__copy">
-            <p className="eyebrow">{activeSectionInfo.eyebrow}</p>
-            <h2>{activeSectionInfo.title}</h2>
-            <p>{activeSectionInfo.description}</p>
-            <div className="hero__pills">
-              <span className="status-pill">Usable MVP</span>
-              <span className="status-pill status-pill--soft">
-                {snapshot ? `${snapshot.hostName} · ${snapshot.osName} ${snapshot.osVersion}` : "Connecting to the local machine"}
-              </span>
-            </div>
-          </div>
-
-          <div className="hero__actions">
-            <button className="primary-button" type="button" onClick={() => void loadSnapshot()} disabled={refreshingSnapshot}>
-              {refreshingSnapshot ? "Refreshing..." : "Refresh system snapshot"}
-            </button>
-
-            <div className="hero__activity card">
-              <p className="eyebrow">What makes this useful</p>
-              <p>The app launches tools, runs checks, exports backups, and keeps the raw result of each action visible.</p>
-            </div>
-          </div>
-        </section>
-
-        {snapshotError ? <section className="panel warning-banner"><strong>System snapshot failed.</strong><span>{snapshotError}</span></section> : null}
-
-        <section className="signals">
-          {signalCards.map((card) => (
-            <article key={card.label} className="card signal-card">
-              <div className="signal-card__top"><p className="eyebrow">{card.label}</p><span>{card.progress.toFixed(0)}%</span></div>
-              <h3>{card.value}</h3>
-              <p>{card.meta}</p>
-              <div className="signal-card__bar"><span style={{ width: `${card.progress}%` }} /></div>
-            </article>
-          ))}
-        </section>
-
-        {activeSection === "dashboard" ? (
-          <section className="panel">
-            <div className="section-heading">
-              <div><p className="eyebrow">Quick Start</p><h2>Useful right now</h2></div>
-              <p>These four actions make the MVP feel like a toolbox instead of a static mockup.</p>
-            </div>
-
-            <div className="cards-grid cards-grid--actions">
-              {dashboardActions.map((tool) => (
-                <article key={tool!.id} className="card action-card">
-                  <div className="action-card__header"><h3>{tool!.title}</h3><span>{tool!.tag}</span></div>
-                  <p>{tool!.description}</p>
-                  <small>{tool!.note}</small>
-                  <button type="button" className="secondary-button" onClick={() => void runAction(tool!.id)} disabled={runningActionId === tool!.id}>
-                    {runningActionId === tool!.id ? "Running..." : "Run action"}
-                  </button>
-                </article>
-              ))}
-            </div>
+        <main className="workspace">
+          <section className="hero panel">
+            <div className="hero__copy"><p className="eyebrow">{activeSectionInfo.eyebrow}</p><h2>{activeSectionInfo.title}</h2><p>{activeSectionInfo.description}</p><div className="hero__pills"><span className="status-pill">客户可展示版</span><span className="status-pill status-pill--soft">{snapshot ? `${snapshot.hostName} · ${snapshot.osName} ${snapshot.osVersion}` : "正在连接本机状态"}</span></div></div>
+            <div className="hero__actions"><button className="primary-button" type="button" onClick={() => void runAction("one_click_clean")} disabled={runningActionId === "one_click_clean"}>{runningActionId === "one_click_clean" ? "清理中..." : "一键清理"}</button><div className="button-row"><button className="secondary-button" type="button" onClick={() => void enterBossMode()}>进入老板键</button><button className="ghost-button" type="button" onClick={() => setPaletteOpen(true)} disabled={!aiRuntime?.paletteReady}>AI 灵感悬浮窗</button></div><div className="hero__activity card"><p className="eyebrow">当前建议</p><p>{aiRuntime?.suggestedEntry ?? "正在读取本地 AI 运行态。"}</p></div></div>
           </section>
-        ) : null}
 
-        {activeSection === "common-tools" ? (
-          <section className="panel">
-            <div className="section-heading">
-              <div><p className="eyebrow">Common Tools</p><h2>Built-in Windows integrations</h2></div>
-              <p>Every card below is wired to a real command or Windows URI already.</p>
-            </div>
-            <div className="cards-grid">
-              {toolDefinitions.map((tool) => (
-                <article key={tool.id} className="card action-card">
-                  <div className="action-card__header"><h3>{tool.title}</h3><span>{tool.tag}</span></div>
-                  <p>{tool.description}</p>
-                  <small>{tool.note}</small>
-                  <button type="button" className="secondary-button" onClick={() => void runAction(tool.id)} disabled={runningActionId === tool.id}>
-                    {runningActionId === tool.id ? "Running..." : "Run action"}
-                  </button>
-                </article>
-              ))}
-            </div>
-          </section>
-        ) : null}
+          {snapshotError ? <section className="panel warning-banner"><strong>系统快照读取失败</strong><span>{snapshotError}</span></section> : null}
+          {pluginError ? <section className="panel warning-banner"><strong>插件扫描失败</strong><span>{pluginError}</span></section> : null}
 
-        {activeSection === "advanced-toolbox" ? (
-          <section className="panel">
-            <div className="section-heading">
-              <div><p className="eyebrow">Plugins</p><h2>Portable tools that light up automatically</h2></div>
-              <p>The launcher reads Plugins/config.json and resolves every executable relative to that folder.</p>
-            </div>
+          <section className="signals">{signalCards.map((card) => <article key={card.label} className="card signal-card"><div className="signal-card__top"><p className="eyebrow">{card.label}</p><span>{card.progress.toFixed(0)}%</span></div><h3>{card.value}</h3><p>{card.meta}</p><div className="signal-card__bar"><span style={{ width: `${card.progress}%` }} /></div></article>)}</section>
 
-            <div className="button-row">
-              <button className="primary-button" type="button" onClick={() => void runAction("open_plugin_folder")} disabled={runningActionId === "open_plugin_folder"}>
-                {runningActionId === "open_plugin_folder" ? "Opening..." : "Open plugin folder"}
-              </button>
-              <button className="secondary-button" type="button" onClick={() => void loadPlugins()} disabled={refreshingPlugins}>
-                {refreshingPlugins ? "Scanning..." : "Rescan plugins"}
-              </button>
-            </div>
+          {activeSection === "dashboard" ? <section className="panel"><div className="section-heading"><div><p className="eyebrow">Quick Launch</p><h2>最该先点的 4 个能力</h2></div><p>先把高频入口做顺，客户看到的第一感觉就会完全不一样。</p></div><div className="cards-grid cards-grid--actions">{dashboardActions.map((tool) => <article key={tool.id} className="card action-card"><div className="action-card__header"><h3>{tool.title}</h3><span>{tool.tag}</span></div><p>{tool.description}</p><small>{tool.note}</small><button type="button" className={tool.tone === "primary" ? "primary-button" : "secondary-button"} onClick={() => void runAction(tool.id)} disabled={runningActionId === tool.id}>{runningActionId === tool.id ? "执行中..." : "立即执行"}</button></article>)}</div></section> : null}
 
-            {pluginError ? <p className="inline-error">{pluginError}</p> : null}
+          {activeSection === "common-tools" ? <section className="panel"><div className="section-heading"><div><p className="eyebrow">Common Tools</p><h2>系统维护和高频动作</h2></div><p>每张卡都接着真实命令或系统入口，不是摆拍按钮。</p></div><div className="cards-grid">{toolDefinitions.map((tool) => <article key={tool.id} className="card action-card"><div className="action-card__header"><h3>{tool.title}</h3><span>{tool.tag}</span></div><p>{tool.description}</p><small>{tool.note}</small><button type="button" className={tool.tone === "primary" ? "primary-button" : "secondary-button"} onClick={() => void runAction(tool.id)} disabled={runningActionId === tool.id}>{runningActionId === tool.id ? "执行中..." : "运行能力"}</button></article>)}</div></section> : null}
 
-            <div className="cards-grid">
-              {plugins.map((plugin) => (
-                <article key={plugin.id} className="card plugin-card">
-                  <div className="plugin-card__top">
-                    <div><h3>{plugin.name}</h3><p>{plugin.category}</p></div>
-                    <span className={`plugin-card__state ${plugin.installed ? "plugin-card__state--installed" : "plugin-card__state--missing"}`}>
-                      {plugin.installed ? "Installed" : "Missing"}
-                    </span>
-                  </div>
-                  <p>{plugin.description}</p>
-                  <div className="tag-list">{plugin.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
-                  <small>{plugin.resolvedPath ?? plugin.executable}</small>
-                  <div className="button-row">
-                    <button type="button" className="secondary-button" onClick={() => void launchPlugin(plugin.id)} disabled={!plugin.installed || runningActionId === plugin.id}>
-                      {runningActionId === plugin.id ? "Launching..." : "Launch"}
-                    </button>
-                    {plugin.homepage ? <button type="button" className="ghost-button" onClick={() => void openTarget(plugin.homepage!)} disabled={runningActionId === plugin.homepage}>Homepage</button> : null}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        ) : null}
+          {activeSection === "advanced-toolbox" ? <><CreatorCachePanel items={creatorCaches} runningId={runningActionId} onRefresh={() => void loadCreatorCaches()} onCleanAll={() => void runAction("creator_deep_clean_all")} onCleanOne={(id) => void cleanCreatorCache(id)} /><StorageHotspotsPanel items={hotspots} onRefresh={() => void loadHotspots()} onOpenPath={(path) => void openTarget(path)} /><section className="panel"><div className="section-heading"><div><p className="eyebrow">Plugin System</p><h2>按需点亮的便携工具</h2></div><p>把便携工具扔进 Plugins 目录，界面会自动识别并点亮。</p></div><div className="button-row"><button className="primary-button" type="button" onClick={() => void runAction("open_plugin_folder")}>打开插件目录</button><button className="secondary-button" type="button" onClick={() => void loadPlugins()}>重新扫描插件</button></div><div className="cards-grid">{plugins.map((plugin) => <article key={plugin.id} className="card plugin-card"><div className="plugin-card__top"><div><h3>{plugin.name}</h3><p>{plugin.category}</p></div><span className={`plugin-card__state ${plugin.installed ? "plugin-card__state--installed" : "plugin-card__state--missing"}`}>{plugin.installed ? "已就绪" : "未安装"}</span></div><p>{plugin.description}</p><div className="tag-list">{plugin.tags.map((tag) => <span key={tag}>{tag}</span>)}</div><small>{plugin.resolvedPath ?? plugin.executable}</small><div className="button-row"><button className="secondary-button" type="button" disabled={!plugin.installed || runningActionId === plugin.id} onClick={() => void launchPlugin(plugin.id)}>{runningActionId === plugin.id ? "启动中..." : "启动"}</button>{plugin.homepage ? <button className="ghost-button" type="button" onClick={() => void openTarget(plugin.homepage!)}>官网</button> : null}</div></article>)}</div></section></> : null}
 
-        {activeSection === "ai-local-deploy" ? (
-          <>
-            <section className="panel">
-              <div className="section-heading">
-                <div><p className="eyebrow">Hardware Fit</p><h2>{aiAssessment.tier}</h2></div>
-                <p>{aiAssessment.headline}</p>
-              </div>
-              <div className="cards-grid">
-                <article className="card module-card"><span className="module-card__status">Recommended</span><h3>Model size</h3><p>{aiAssessment.models.join(" · ")}</p><small>Based on current RAM and detected VRAM</small></article>
-                <article className="card module-card"><span className="module-card__status">Runtime</span><h3>Suggested deploy pattern</h3><p>{aiAssessment.runtime}</p><small>Keep idle shutdown in the loop from day one</small></article>
-                <article className="card module-card"><span className="module-card__status">Current machine</span><h3>Detected budget</h3><p>{formatMemory(snapshot?.memoryTotalMb)} RAM · {formatMemory(snapshot?.gpuMemoryMb)} VRAM</p><small>{snapshot?.gpuName ?? "Waiting for GPU detection"}</small></article>
-              </div>
-            </section>
+          {activeSection === "ai-local-deploy" ? <><section className="panel"><div className="section-heading"><div><p className="eyebrow">AI Fit</p><h2>{aiAssessment.tier}</h2></div><p>{aiAssessment.headline}</p></div><div className="cards-grid"><article className="card module-card"><span className="module-card__status">推荐模型</span><h3>{aiAssessment.models.join(" / ")}</h3><p>根据当前硬件给出的现实建议，不盲目堆参数。</p></article><article className="card module-card"><span className="module-card__status">运行方式</span><h3>{aiAssessment.runtime}</h3><p>用完即走，别让本地模型把显存常驻吃空。</p></article><article className="card module-card"><span className="module-card__status">当前机器</span><h3>{formatMemory(snapshot?.memoryTotalMb)} RAM / {formatMemory(snapshot?.gpuMemoryMb)} VRAM</h3><p>{snapshot?.gpuName ?? "等待显卡检测"}</p></article></div></section><section className="panel"><div className="section-heading"><div><p className="eyebrow">Runtime Status</p><h2>Ollama 与灵感悬浮窗状态</h2></div><p>{aiRuntime?.suggestedEntry ?? "正在读取运行态。"}</p></div><div className="stats-row"><article className="card stat-chip"><strong>{aiRuntime?.ollamaInstalled ? "已安装" : "未安装"}</strong><span>Ollama</span></article><article className="card stat-chip"><strong>{aiRuntime?.ollamaRunning ? "运行中" : "未运行"}</strong><span>推理进程</span></article><article className="card stat-chip"><strong>{aiRuntime?.availableModels.length ?? 0}</strong><span>可用模型</span></article><article className="card stat-chip"><strong>{aiRuntime?.openClawDetected ? "已发现" : "未发现"}</strong><span>OpenClaw</span></article></div><ul className="plain-list">{aiAssessment.notes.map((note) => <li key={note}>{note}</li>)}</ul></section></> : null}
+        </main>
 
-            <section className="panel">
-              <div className="section-heading">
-                <div><p className="eyebrow">Execution Notes</p><h2>How to keep local AI from becoming a resource leak</h2></div>
-                <p>The recommendation engine is useful now even before one-click deploy arrives.</p>
-              </div>
-              <ul className="plain-list">{aiAssessment.notes.map((note) => <li key={note}>{note}</li>)}</ul>
-            </section>
-          </>
-        ) : null}
-      </main>
+        <aside className="rail">
+          <section className="panel rail-panel"><p className="eyebrow">系统概览</p><h2>当前机器</h2><dl className="detail-list"><div><dt>主机</dt><dd>{snapshot?.hostName ?? "读取中"}</dd></div><div><dt>系统</dt><dd>{snapshot ? `${snapshot.osName} (${snapshot.osBuild})` : "读取中"}</dd></div><div><dt>主网络</dt><dd>{snapshot?.networkDescription ?? "等待网卡识别"}</dd></div><div><dt>刷新时间</dt><dd>{formatRelativeTime(snapshot?.collectedAt)}</dd></div><div><dt>截图方案</dt><dd>{screenshotProvider ? screenshotProvider.name : "Windows 自带"}</dd></div></dl></section>
+          <section className="panel rail-panel"><p className="eyebrow">操作结果</p><h2>最近一次动作</h2>{lastResult ? <div className="result-card"><span className={`result-card__status ${lastResult.success ? "is-success" : "is-failure"}`}>{lastResult.success ? "成功" : "需要注意"}</span><h3>{lastResult.title}</h3><p>{lastResult.summary}</p><small>耗时 {formatDuration(lastResult.durationMs)}</small>{lastResult.warnings.length > 0 ? <ul className="plain-list">{lastResult.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}{lastResult.outputPath ? <button className="ghost-button" type="button" onClick={() => void openTarget(lastResult.outputPath!)}>打开输出位置</button> : null}<pre className="console-output">{lastResult.details}</pre></div> : <p className="muted-copy">执行任意功能后，这里会固定展示原始结果与返回细节。</p>}</section>
+          <section className="panel rail-panel"><p className="eyebrow">使用守则</p><h2>Less is more</h2><ul className="plain-list">{safetyRails.map((item) => <li key={item}>{item}</li>)}</ul></section>
+          <section className="panel rail-panel"><p className="eyebrow">后续扩展</p><h2>下一步空间</h2><ul className="plain-list">{roadmap.map((item) => <li key={item}>{item}</li>)}</ul><p className="muted-copy">已接入插件 {installedPlugins.length} 个，全部清单 {plugins.length} 个。</p></section>
+          <DonatePanel charged={charged} onCharge={() => setCharged(true)} />
+        </aside>
+      </div>
 
-      <aside className="rail">
-        <section className="panel rail-panel">
-          <p className="eyebrow">Snapshot</p>
-          <h2>Current machine</h2>
-          <dl className="detail-list">
-            <div><dt>Host</dt><dd>{snapshot?.hostName ?? "Loading"}</dd></div>
-            <div><dt>Build</dt><dd>{snapshot ? `${snapshot.osName} (${snapshot.osBuild})` : "Loading"}</dd></div>
-            <div><dt>Primary network</dt><dd>{snapshot?.networkDescription ?? "Waiting for adapter detection"}</dd></div>
-            <div><dt>Last refresh</dt><dd>{formatRelativeTime(snapshot?.collectedAt)}</dd></div>
-          </dl>
-        </section>
-
-        <section className="panel rail-panel">
-          <p className="eyebrow">Activity</p>
-          <h2>Last action result</h2>
-          {lastResult ? (
-            <div className="result-card">
-              <span className={`result-card__status ${lastResult.success ? "is-success" : "is-failure"}`}>{lastResult.success ? "Success" : "Needs attention"}</span>
-              <h3>{lastResult.title}</h3>
-              <p>{lastResult.summary}</p>
-              <small>Completed in {formatDuration(lastResult.durationMs)}</small>
-              {lastResult.warnings.length > 0 ? <ul className="plain-list">{lastResult.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
-              {lastResult.outputPath ? <button type="button" className="ghost-button" onClick={() => void openTarget(lastResult.outputPath!)} disabled={runningActionId === lastResult.outputPath}>Open output path</button> : null}
-              <pre className="console-output">{lastResult.details}</pre>
-            </div>
-          ) : <p className="muted-copy">Run any action and the result will be pinned here with raw details.</p>}
-        </section>
-
-        <section className="panel rail-panel">
-          <p className="eyebrow">Plugin Summary</p>
-          <h2>Portable tools</h2>
-          <ul className="plain-list">
-            <li>{installedPlugins.length} plugin(s) installed from the manifest</li>
-            <li>Screenshot provider: {screenshotProvider ? screenshotProvider.name : "Windows fallback only"}</li>
-            <li>{plugins.length} total manifest entries ready for future growth</li>
-          </ul>
-        </section>
-
-        <section className="panel rail-panel">
-          <p className="eyebrow">Safety Rails</p>
-          <h2>Guiding rules</h2>
-          <ul className="plain-list">{safetyRails.map((item) => <li key={item}>{item}</li>)}</ul>
-        </section>
-
-        <section className="panel rail-panel">
-          <p className="eyebrow">Roadmap</p>
-          <h2>Next steps</h2>
-          <ul className="plain-list">{roadmap.map((item) => <li key={item}>{item}</li>)}</ul>
-        </section>
-      </aside>
-    </div>
+      <AiPalette open={paletteOpen} runtime={aiRuntime} prompt={aiPrompt} busy={aiBusy} response={aiResponse} onPromptChange={setAiPrompt} onClose={() => setPaletteOpen(false)} onSubmit={() => void askLocalAi()} />
+      {bossMode ? <BossModeOverlay state={bossState} /> : null}
+      {toast ? <div className={`toast toast--${toast.tone}`}>{toast.message}</div> : null}
+    </>
   );
 }
 
