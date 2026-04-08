@@ -26,7 +26,7 @@ export function CreatorCachePanel({
           <p className="eyebrow">Creator Cache Cleaner</p>
           <h2>创作者深度清理</h2>
         </div>
-        <p>面向剪映、CapCut、Adobe、DaVinci、OBS 这类重度缓存场景做的定向回血。</p>
+        <p>针对创作软件缓存做一轮集中回血。</p>
       </div>
 
       <div className="stats-row">
@@ -53,15 +53,14 @@ export function CreatorCachePanel({
         </button>
       </div>
 
-      <div className="cards-grid">
+      <div className="cards-grid cards-grid--compact">
         {items.map((item) => (
-          <article key={item.id} className="card action-card">
+          <article key={item.id} className="card action-card action-card--compact">
             <div className="action-card__header">
               <h3>{item.name}</h3>
               <span>{item.exists ? "已发现" : "未发现"}</span>
             </div>
             <p>{item.description}</p>
-            <small>{item.path}</small>
             <div className="button-row">
               <span className="status-pill">{formatBytes(item.sizeBytes)}</span>
               <button
@@ -73,6 +72,10 @@ export function CreatorCachePanel({
                 {runningId === item.id ? "清理中..." : "清理这一项"}
               </button>
             </div>
+            <details className="inline-details">
+              <summary>查看路径</summary>
+              <small>{item.path}</small>
+            </details>
           </article>
         ))}
       </div>

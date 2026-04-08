@@ -21,18 +21,18 @@ export function StorageHotspotsPanel({
           <p className="eyebrow">Space Visualizer</p>
           <h2>空间透视仪</h2>
         </div>
-        <p>用更直观的可视条带，把下载、桌面、文档、视频里最占空间的内容揪出来。</p>
+        <p>快速找出最占空间的位置。</p>
       </div>
 
       <div className="button-row">
         <button className="secondary-button" type="button" onClick={onRefresh}>
-          重新透视
+          重新扫描
         </button>
       </div>
 
       <div className="hotspot-list">
         {items.map((item) => (
-          <article key={item.id} className="card hotspot-card">
+          <article key={item.id} className="card hotspot-card action-card--compact">
             <div className="action-card__header">
               <h3>{item.label}</h3>
               <span>{item.source}</span>
@@ -43,10 +43,11 @@ export function StorageHotspotsPanel({
             <p>
               {formatBytes(item.sizeBytes)} · {item.itemCount} 项
             </p>
-            <small>{item.path}</small>
-            <button className="ghost-button" type="button" onClick={() => onOpenPath(item.path)}>
-              打开位置
-            </button>
+            <div className="button-row">
+              <button className="ghost-button" type="button" onClick={() => onOpenPath(item.path)}>
+                打开位置
+              </button>
+            </div>
           </article>
         ))}
       </div>

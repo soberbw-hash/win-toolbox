@@ -1,3 +1,4 @@
+use encoding_rs::GBK;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -656,12 +657,32 @@ fn run_command_capture(program: &str, args: &[&str]) -> Result<ProcessCapture, S
 
     Ok(ProcessCapture {
         success: output.status.success(),
-        stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        stdout: decode_command_output(&output.stdout),
+        stderr: decode_command_output(&output.stderr),
     })
 }
 
+fn decode_command_output(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        return String::new();
+    }
+
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        return text.trim().to_string();
+    }
+
+    let (decoded, _, _) = GBK.decode(bytes);
+    decoded.trim().to_string()
+}
+
+fn with_powershell_utf8(script: &str) -> String {
+    format!(
+        "$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)\n{script}"
+    )
+}
+
 fn run_powershell_json(script: &str) -> Result<String, String> {
+    let wrapped_script = with_powershell_utf8(script);
     let capture = run_command_capture(
         "powershell.exe",
         &[
@@ -669,7 +690,7 @@ fn run_powershell_json(script: &str) -> Result<String, String> {
             "-ExecutionPolicy",
             "Bypass",
             "-Command",
-            script,
+            &wrapped_script,
         ],
     )?;
 
@@ -681,6 +702,7 @@ fn run_powershell_json(script: &str) -> Result<String, String> {
 }
 
 fn run_powershell_capture(script: &str) -> Result<ProcessCapture, String> {
+    let wrapped_script = with_powershell_utf8(script);
     run_command_capture(
         "powershell.exe",
         &[
@@ -688,7 +710,7 @@ fn run_powershell_capture(script: &str) -> Result<ProcessCapture, String> {
             "-ExecutionPolicy",
             "Bypass",
             "-Command",
-            script,
+            &wrapped_script,
         ],
     )
 }
