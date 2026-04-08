@@ -161,6 +161,24 @@ struct PluginManifest {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+struct ComponentManifest {
+    id: String,
+    name: String,
+    description: String,
+    category: String,
+    kind: String,
+    installed: bool,
+    status_label: String,
+    summary: String,
+    winget_id: Option<String>,
+    homepage: Option<String>,
+    launch_path: Option<String>,
+    launch_arguments: Option<Vec<String>>,
+    recommended: bool,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct CreatorCacheTarget {
     id: String,
     name: String,
@@ -222,6 +240,23 @@ struct CreatorCachePreset {
     description: &'static str,
     path: PathBuf,
     recommended: bool,
+}
+
+#[derive(Debug)]
+struct ComponentDefinition {
+    id: &'static str,
+    name: &'static str,
+    description: &'static str,
+    category: &'static str,
+    kind: &'static str,
+    winget_id: Option<&'static str>,
+    homepage: Option<&'static str>,
+    detect_paths: Vec<PathBuf>,
+    launch_arguments: Vec<String>,
+    recommended: bool,
+    installed: bool,
+    status_label: String,
+    summary: String,
 }
 
 fn workspace_root() -> Option<PathBuf> {
@@ -289,8 +324,19 @@ fn local_app_data_dir() -> Option<PathBuf> {
     std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
 }
 
+fn program_files_dir() -> Option<PathBuf> {
+    std::env::var_os("ProgramFiles").map(PathBuf::from)
+}
+
 fn roaming_app_data_dir() -> Option<PathBuf> {
     std::env::var_os("APPDATA").map(PathBuf::from)
+}
+
+fn component_root() -> PathBuf {
+    local_app_data_dir()
+        .unwrap_or_else(documents_dir)
+        .join("WinToolbox")
+        .join("Components")
 }
 
 fn ensure_default_plugin_assets(plugin_dir: &Path) -> Result<(), String> {
@@ -356,6 +402,386 @@ fn load_plugins_internal() -> Result<Vec<PluginManifest>, String> {
     });
 
     Ok(manifests)
+}
+
+fn find_first_existing_path(paths: &[PathBuf]) -> Option<PathBuf> {
+    paths.iter().find(|path| path.exists()).cloned()
+}
+
+fn sharex_detect_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    if let Some(local) = local_app_data_dir() {
+        paths.push(local.join("Programs").join("ShareX").join("ShareX.exe"));
+    }
+
+    if let Some(program_files) = program_files_dir() {
+        paths.push(program_files.join("ShareX").join("ShareX.exe"));
+    }
+
+    paths
+}
+
+fn everything_detect_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    if let Some(program_files) = program_files_dir() {
+        paths.push(program_files.join("Everything").join("Everything.exe"));
+    }
+
+    paths
+}
+
+fn context_menu_manager_detect_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    if let Some(local) = local_app_data_dir() {
+        paths.push(
+            local.join("Programs")
+                .join("ContextMenuManager")
+                .join("ContextMenuManager.exe"),
+        );
+    }
+
+    if let Some(program_files) = program_files_dir() {
+        paths.push(
+            program_files
+                .join("ContextMenuManager")
+                .join("ContextMenuManager.exe"),
+        );
+    }
+
+    paths
+}
+
+fn seven_zip_detect_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    if let Some(program_files) = program_files_dir() {
+        paths.push(program_files.join("7-Zip").join("7zFM.exe"));
+    }
+
+    paths
+}
+
+fn powertoys_detect_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    if let Some(program_files) = program_files_dir() {
+        paths.push(program_files.join("PowerToys").join("PowerToys.exe"));
+    }
+
+    if let Some(local) = local_app_data_dir() {
+        paths.push(local.join("PowerToys").join("PowerToys.exe"));
+    }
+
+    paths
+}
+
+fn build_component_definition(
+    id: &'static str,
+    name: &'static str,
+    description: &'static str,
+    category: &'static str,
+    winget_id: Option<&'static str>,
+    homepage: Option<&'static str>,
+    detect_paths: Vec<PathBuf>,
+    launch_arguments: Vec<String>,
+    recommended: bool,
+) -> ComponentDefinition {
+    let launch_path = find_first_existing_path(&detect_paths);
+    let installed = launch_path.is_some() || winget_id.map(winget_package_installed).unwrap_or(false);
+
+    ComponentDefinition {
+        id,
+        name,
+        description,
+        category,
+        kind: if winget_id.is_some() { "winget" } else { "built-in" },
+        winget_id,
+        homepage,
+        detect_paths,
+        launch_arguments,
+        recommended,
+        installed,
+        status_label: if installed {
+            "可用".to_string()
+        } else {
+            "未安装".to_string()
+        },
+        summary: if installed {
+            format!("{name} 已就绪，可以直接使用。")
+        } else if winget_id.is_some() {
+            format!("{name} 可一键安装，安装后立即可用。")
+        } else {
+            format!("{name} 已内置在主程序中。")
+        },
+    }
+}
+
+fn list_components_internal() -> Vec<ComponentManifest> {
+    let mut components = vec![
+        ComponentDefinition {
+            id: "capture-core",
+            name: "基础截图",
+            description: "系统截图能力已内置，安装完成后即可用。",
+            category: "基础能力",
+            kind: "built-in",
+            winget_id: None,
+            homepage: None,
+            detect_paths: Vec::new(),
+            launch_arguments: Vec::new(),
+            recommended: true,
+            installed: true,
+            status_label: "可用".to_string(),
+            summary: "区域截图开箱即用。".to_string(),
+        },
+        build_component_definition(
+            "capture-plus",
+            "截图增强",
+            "安装 ShareX，获取滚动截图、标注和更完整的截图工作流。",
+            "截图增强",
+            Some("ShareX.ShareX"),
+            Some("https://getsharex.com/"),
+            sharex_detect_paths(),
+            vec!["-RectangleRegion".to_string()],
+            true,
+        ),
+        build_component_definition(
+            "everything-search",
+            "极速搜索",
+            "安装 Everything，让文件搜索和空间定位更顺手。",
+            "效率增强",
+            Some("voidtools.Everything"),
+            Some("https://www.voidtools.com/"),
+            everything_detect_paths(),
+            Vec::new(),
+            true,
+        ),
+        build_component_definition(
+            "context-menu-manager",
+            "右键菜单管理",
+            "一键安装右键菜单管理器，方便清理和整理系统右键项。",
+            "效率增强",
+            Some("BluePointLilac.ContextMenuManager"),
+            Some("https://github.com/BluePointLilac/ContextMenuManager"),
+            context_menu_manager_detect_paths(),
+            Vec::new(),
+            false,
+        ),
+        build_component_definition(
+            "archive-tools",
+            "压缩解压增强",
+            "安装 7-Zip，补齐常见压缩格式支持。",
+            "效率增强",
+            Some("7zip.7zip"),
+            Some("https://www.7-zip.org/"),
+            seven_zip_detect_paths(),
+            Vec::new(),
+            false,
+        ),
+        build_component_definition(
+            "powertoys-suite",
+            "PowerToys",
+            "安装 PowerToys，补齐效率工具集。",
+            "效率增强",
+            Some("Microsoft.PowerToys"),
+            Some("https://github.com/microsoft/PowerToys"),
+            powertoys_detect_paths(),
+            Vec::new(),
+            false,
+        ),
+        ComponentDefinition {
+            id: "ollama-runtime",
+            name: "Ollama 运行时",
+            description: "本地 AI 运行时，安装后可直接接入本地模型。",
+            category: "AI",
+            kind: "winget",
+            winget_id: Some("Ollama.Ollama"),
+            homepage: Some("https://ollama.com/"),
+            detect_paths: Vec::new(),
+            launch_arguments: Vec::new(),
+            recommended: true,
+            installed: command_exists("ollama"),
+            status_label: if command_exists("ollama") {
+                "可用".to_string()
+            } else {
+                "未安装".to_string()
+            },
+            summary: if command_exists("ollama") {
+                "已检测到 Ollama，可继续拉取本地模型。".to_string()
+            } else {
+                "未检测到 Ollama，可一键安装运行时。".to_string()
+            },
+        },
+    ];
+
+    components.sort_by(|left, right| {
+        right
+            .recommended
+            .cmp(&left.recommended)
+            .then(right.installed.cmp(&left.installed))
+            .then(left.category.cmp(&right.category))
+            .then(left.name.cmp(&right.name))
+    });
+
+    components
+        .into_iter()
+        .map(|item| ComponentManifest {
+            id: item.id.to_string(),
+            name: item.name.to_string(),
+            description: item.description.to_string(),
+            category: item.category.to_string(),
+            kind: item.kind.to_string(),
+            installed: item.installed,
+            status_label: item.status_label,
+            summary: item.summary,
+            winget_id: item.winget_id.map(|value| value.to_string()),
+            homepage: item.homepage.map(|value| value.to_string()),
+            launch_path: find_first_existing_path(&item.detect_paths)
+                .map(|path| path.to_string_lossy().to_string()),
+            launch_arguments: if item.launch_arguments.is_empty() {
+                None
+            } else {
+                Some(item.launch_arguments)
+            },
+            recommended: item.recommended,
+        })
+        .collect()
+}
+
+fn install_component_internal(component_id: &str) -> Result<ToolActionResult, String> {
+    let started_at = Instant::now();
+    let components = list_components_internal();
+    let component = components
+        .into_iter()
+        .find(|item| item.id == component_id)
+        .ok_or_else(|| format!("未找到组件：{component_id}"))?;
+
+    if component.installed {
+        return Ok(build_action_result(
+            "install_component",
+            "安装组件",
+            true,
+            format!("{} 已经处于可用状态。", component.name),
+            component.summary,
+            component.launch_path,
+            Vec::new(),
+            started_at,
+        ));
+    }
+
+    let winget_id = component
+        .winget_id
+        .clone()
+        .ok_or_else(|| "该组件暂不支持独立安装。".to_string())?;
+
+    let capture = run_command_capture(
+        "winget",
+        &[
+            "install",
+            "--id",
+            &winget_id,
+            "-e",
+            "--accept-package-agreements",
+            "--accept-source-agreements",
+            "--disable-interactivity",
+        ],
+    )?;
+
+    Ok(build_action_result(
+        "install_component",
+        "安装组件",
+        capture.success,
+        if capture.success {
+            format!("{} 安装完成。", component.name)
+        } else {
+            format!("{} 安装失败。", component.name)
+        },
+        format_process_details(&capture),
+        None,
+        vec![String::from("如果安装过程中弹出系统确认，请允许安装继续执行。")],
+        started_at,
+    ))
+}
+
+fn uninstall_component_internal(component_id: &str) -> Result<ToolActionResult, String> {
+    let started_at = Instant::now();
+    let components = list_components_internal();
+    let component = components
+        .into_iter()
+        .find(|item| item.id == component_id)
+        .ok_or_else(|| format!("未找到组件：{component_id}"))?;
+
+    let winget_id = component
+        .winget_id
+        .clone()
+        .ok_or_else(|| "该组件暂不支持卸载。".to_string())?;
+
+    let capture = run_command_capture(
+        "winget",
+        &[
+            "uninstall",
+            "--id",
+            &winget_id,
+            "-e",
+            "--accept-source-agreements",
+            "--disable-interactivity",
+        ],
+    )?;
+
+    Ok(build_action_result(
+        "uninstall_component",
+        "卸载组件",
+        capture.success,
+        if capture.success {
+            format!("{} 已卸载。", component.name)
+        } else {
+            format!("{} 卸载失败。", component.name)
+        },
+        format_process_details(&capture),
+        None,
+        vec![String::from("部分组件卸载后可能需要手动关闭相关进程。")],
+        started_at,
+    ))
+}
+
+fn launch_component_internal(component_id: &str) -> Result<ToolActionResult, String> {
+    let started_at = Instant::now();
+    let components = list_components_internal();
+    let component = components
+        .into_iter()
+        .find(|item| item.id == component_id)
+        .ok_or_else(|| format!("未找到组件：{component_id}"))?;
+
+    if let Some(launch_path) = component.launch_path.clone() {
+        let args = component.launch_arguments.clone().unwrap_or_default();
+        spawn_detached_path(Path::new(&launch_path), &args)?;
+
+        Ok(build_action_result(
+            "launch_component",
+            "启动组件",
+            true,
+            format!("已启动 {}。", component.name),
+            format!("执行文件：{launch_path}"),
+            Some(launch_path),
+            Vec::new(),
+            started_at,
+        ))
+    } else if let Some(homepage) = component.homepage.clone() {
+        Ok(execute_open_target(&homepage, "打开组件主页", "launch_component"))
+    } else {
+        Ok(build_action_result(
+            "launch_component",
+            "启动组件",
+            false,
+            format!("{} 当前没有可启动入口。", component.name),
+            component.summary,
+            None,
+            Vec::new(),
+            started_at,
+        ))
+    }
 }
 
 fn creator_cache_presets() -> Vec<CreatorCachePreset> {
@@ -547,10 +973,7 @@ fn get_ai_runtime_status_internal() -> AiRuntimeStatus {
         (false, Vec::new())
     };
 
-    let open_claw_detected = plugin_root().join("OpenClaw").exists()
-        || load_plugins_internal()
-            .map(|plugins| plugins.into_iter().any(|plugin| plugin.id == "openclaw" && plugin.installed))
-            .unwrap_or(false);
+    let open_claw_detected = component_root().join("OpenClaw").exists();
 
     let palette_ready = ollama_installed && !available_models.is_empty();
     let suggested_entry = if !ollama_installed {
@@ -630,6 +1053,30 @@ fn command_exists(program: &str) -> bool {
     run_command_capture("where.exe", &[program])
         .map(|capture| capture.success)
         .unwrap_or(false)
+}
+
+fn winget_package_installed(package_id: &str) -> bool {
+    if !command_exists("winget") {
+        return false;
+    }
+
+    run_command_capture(
+        "winget",
+        &[
+            "list",
+            "--id",
+            package_id,
+            "-e",
+            "--accept-source-agreements",
+            "--disable-interactivity",
+        ],
+    )
+    .map(|capture| {
+        capture.success
+            && !capture.stdout.contains("No installed package found")
+            && !capture.stdout.contains("没有已安装的程序包")
+    })
+    .unwrap_or(false)
 }
 
 fn parse_ollama_models(stdout: &str) -> Vec<String> {
@@ -829,73 +1276,53 @@ fn execute_open_target(target: &str, title: &str, action_id: &str) -> ToolAction
 fn execute_launch_capture() -> ToolActionResult {
     let started_at = Instant::now();
 
-    match load_plugins_internal() {
-        Ok(plugins) => {
-            if let Some(plugin) = plugins.into_iter().find(|item| {
-                item.installed
-                    && item
-                        .tags
-                        .iter()
-                        .any(|tag| tag.eq_ignore_ascii_case("screenshot"))
-            }) {
-                if let Some(resolved_path) = plugin.resolved_path.clone() {
-                    match spawn_detached_path(Path::new(&resolved_path), &[]) {
-                        Ok(()) => {
-                            return build_action_result(
-                                "launch_capture",
-                                "高级截图利器",
-                                true,
-                                format!("已从插件目录启动 {}。", plugin.name),
-                                format!("执行文件：{resolved_path}"),
-                                None,
-                                Vec::new(),
-                                started_at,
-                            );
-                        }
-                        Err(error) => {
-                            return build_action_result(
-                                "launch_capture",
-                                "高级截图利器",
-                                false,
-                                format!("已检测到 {}，但启动失败。", plugin.name),
-                                error,
-                                None,
-                                Vec::new(),
-                                started_at,
-                            );
-                        }
-                    }
-                }
+    if let Some(sharex_path) = find_first_existing_path(&sharex_detect_paths()) {
+        let arguments = vec!["-RectangleRegion".to_string()];
+        match spawn_detached_path(&sharex_path, &arguments) {
+            Ok(()) => {
+                return build_action_result(
+                    "launch_capture",
+                    "截图",
+                    true,
+                    "已启动截图增强组件。",
+                    format!(
+                        "组件：ShareX\n执行文件：{}\n模式：区域截图",
+                        sharex_path.display()
+                    ),
+                    Some(sharex_path.to_string_lossy().to_string()),
+                    Vec::new(),
+                    started_at,
+                )
             }
-        }
-        Err(error) => {
-            return build_action_result(
-                "launch_capture",
-                "高级截图利器",
-                false,
-                "截图插件扫描失败，无法优先调用第三方截图工具。",
-                error,
-                None,
-                Vec::new(),
-                started_at,
-            );
+            Err(error) => {
+                return build_action_result(
+                    "launch_capture",
+                    "截图",
+                    false,
+                    "截图增强组件存在，但启动失败。",
+                    error,
+                    Some(sharex_path.to_string_lossy().to_string()),
+                    Vec::new(),
+                    started_at,
+                )
+            }
         }
     }
 
     match spawn_detached("explorer.exe", &[String::from("ms-screenclip:")]) {
         Ok(()) => build_action_result(
             "launch_capture",
-            "高级截图利器",
+            "截图",
             true,
-            "已打开 Windows 自带截图工具。",
-            "未检测到第三方截图插件，所以自动回退到 Win + Shift + S。",
+            "已打开系统截图。",
+            "当前使用系统自带截图。你也可以在组件中心一键安装截图增强组件。",
             None,
-            vec![String::from("如需贴图、OCR 和长截图，建议把 PixPin 或 Snipaste 放进 Plugins 目录。")],
+            Vec::new(),
             started_at,
         ),
         Err(error) => build_action_result(
             "launch_capture",
-            "高级截图利器",
+            "截图",
             false,
             "系统截图工具无法启动。",
             error,
@@ -1282,7 +1709,6 @@ fn execute_tool_action(action_id: &str) -> ToolActionResult {
     match action_id {
         "launch_capture" => execute_launch_capture(),
         "one_click_clean" => execute_temp_cleanup(),
-        "creator_deep_clean_all" => execute_creator_deep_clean_all(),
         "open_apps_features" => {
             execute_open_target("ms-settings:appsfeatures", "应用管理", "open_apps_features")
         }
@@ -1303,7 +1729,6 @@ fn execute_tool_action(action_id: &str) -> ToolActionResult {
             &["/Online", "/Cleanup-Image", "/ScanHealth"],
         ),
         "export_drivers" => execute_driver_export(),
-        "open_plugin_folder" => execute_open_plugin_folder(),
         "enable_beast_mode" => execute_power_mode(
             "enable_beast_mode",
             "性能野兽模式",
@@ -1415,6 +1840,11 @@ fn list_plugins() -> Result<Vec<PluginManifest>, String> {
 }
 
 #[tauri::command]
+fn list_components() -> Result<Vec<ComponentManifest>, String> {
+    Ok(list_components_internal())
+}
+
+#[tauri::command]
 async fn run_tool_action(action_id: String) -> Result<ToolActionResult, String> {
     tauri::async_runtime::spawn_blocking(move || execute_tool_action(&action_id))
         .await
@@ -1429,65 +1859,28 @@ async fn launch_plugin(plugin_id: String) -> Result<ToolActionResult, String> {
 }
 
 #[tauri::command]
+async fn launch_component(component_id: String) -> Result<ToolActionResult, String> {
+    tauri::async_runtime::spawn_blocking(move || launch_component_internal(&component_id))
+        .await
+        .map_err(|error| format!("启动组件任务失败：{error}"))?
+}
+
+#[tauri::command]
+async fn manage_component(component_id: String, operation: String) -> Result<ToolActionResult, String> {
+    tauri::async_runtime::spawn_blocking(move || match operation.as_str() {
+        "install" | "repair" => install_component_internal(&component_id),
+        "uninstall" => uninstall_component_internal(&component_id),
+        _ => Err(format!("未知组件操作：{operation}")),
+    })
+    .await
+    .map_err(|error| format!("组件管理任务失败：{error}"))?
+}
+
+#[tauri::command]
 async fn open_target(target: String) -> Result<ToolActionResult, String> {
     tauri::async_runtime::spawn_blocking(move || execute_open_target(&target, "打开目标", "open_target"))
         .await
         .map_err(|error| format!("打开目标任务失败：{error}"))
-}
-
-#[tauri::command]
-async fn scan_creator_caches() -> Result<Vec<CreatorCacheTarget>, String> {
-    tauri::async_runtime::spawn_blocking(scan_creator_caches_internal)
-        .await
-        .map_err(|error| format!("扫描创作者缓存失败：{error}"))
-}
-
-#[tauri::command]
-async fn clean_creator_cache(cache_id: String) -> Result<ToolActionResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let started_at = Instant::now();
-        let target = creator_cache_presets()
-            .into_iter()
-            .find(|preset| preset.id == cache_id)
-            .ok_or_else(|| format!("未找到缓存目标：{cache_id}"))?;
-
-        if !target.path.exists() {
-            return Ok(build_action_result(
-                "clean_creator_cache",
-                "清理创作者缓存",
-                true,
-                format!("{} 当前不存在，不需要清理。", target.name),
-                target.path.to_string_lossy(),
-                Some(target.path.to_string_lossy().to_string()),
-                Vec::new(),
-                started_at,
-            ));
-        }
-
-        let stats = cleanup_directory(&target.path);
-        Ok(build_action_result(
-            "clean_creator_cache",
-            "清理创作者缓存",
-            true,
-            format!(
-                "{} 清理完成，预计释放 {}。",
-                target.name,
-                format_bytes(stats.bytes_freed)
-            ),
-            format!(
-                "删除文件：{}\n删除文件夹：{}\n跳过项目：{}\n路径：{}",
-                stats.files_removed,
-                stats.directories_removed,
-                stats.skipped_entries,
-                target.path.display()
-            ),
-            Some(target.path.to_string_lossy().to_string()),
-            vec![String::from("建议在相关创作软件关闭后再执行清理。")],
-            started_at,
-        ))
-    })
-    .await
-    .map_err(|error| format!("清理创作者缓存失败：{error}"))?
 }
 
 #[tauri::command]
@@ -1517,12 +1910,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_system_snapshot,
-            list_plugins,
+            list_components,
             run_tool_action,
-            launch_plugin,
+            launch_component,
+            manage_component,
             open_target,
-            scan_creator_caches,
-            clean_creator_cache,
             scan_storage_hotspots,
             get_ai_runtime_status,
             ask_local_ai

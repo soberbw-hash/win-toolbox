@@ -1,66 +1,65 @@
-import type { ActionId, SectionConfig, SectionId, ToolDefinition } from "./types";
+import type {
+  ActionId,
+  HomeQuickAction,
+  SectionConfig,
+  SectionId,
+  ToolDefinition,
+} from "./types";
 
 export const sections: Array<{ id: SectionId; label: string; hint: string }> = [
-  { id: "dashboard", label: "仪表盘", hint: "高频能力一眼看全" },
-  { id: "common-tools", label: "常用工具", hint: "截图修复清理即点即用" },
-  { id: "advanced-toolbox", label: "进阶工具箱", hint: "创作者清理与空间透视" },
-  { id: "ai-local-deploy", label: "AI 本地大脑", hint: "本地模型与灵感悬浮窗" },
+  { id: "home", label: "首页", hint: "四个高频动作" },
+  { id: "system", label: "系统", hint: "修复与维护" },
+  { id: "efficiency", label: "效率", hint: "截图与组件中心" },
+  { id: "ai", label: "AI", hint: "本地模型与运行时" },
+  { id: "settings", label: "设置", hint: "外观与偏好" },
 ];
 
 export const sectionCatalog: Record<SectionId, SectionConfig> = {
-  dashboard: {
-    label: "仪表盘",
-    hint: "高频能力一眼看全",
-    eyebrow: "首页 / Dashboard",
-    title: "少一点按钮，多一点效率。",
-    description: "高频入口直达，状态一眼看懂。",
+  home: {
+    label: "首页",
+    hint: "四个高频动作",
+    eyebrow: "Win Toolbox / Home",
+    title: "装好就能直接用。",
+    description: "首页保留高频动作，复杂能力收进二级页。",
   },
-  "common-tools": {
-    label: "常用工具",
-    hint: "截图修复清理即点即用",
-    eyebrow: "常用工具",
-    title: "系统维护和高频动作",
-    description: "常用能力收一屏，点一下就开跑。",
+  system: {
+    label: "系统",
+    hint: "修复与维护",
+    eyebrow: "System",
+    title: "清楚、克制、可回看。",
+    description: "修复、导出、更新和性能模式都放在这里。",
   },
-  "advanced-toolbox": {
-    label: "进阶工具箱",
-    hint: "创作者清理与空间透视",
-    eyebrow: "进阶工具箱",
-    title: "创作者与进阶能力",
-    description: "重功能放二级层，需要时再展开。",
+  efficiency: {
+    label: "效率",
+    hint: "截图与组件中心",
+    eyebrow: "Efficiency",
+    title: "截图、空间管理、组件安装。",
+    description: "去插件化，改成安装即用的组件思路。",
   },
-  "ai-local-deploy": {
-    label: "AI 本地大脑",
-    hint: "本地模型与灵感悬浮窗",
-    eyebrow: "AI 本地大脑",
-    title: "本地 AI 面板",
-    description: "先评估硬件，再决定模型与运行方式。",
+  ai: {
+    label: "AI",
+    hint: "本地模型与运行时",
+    eyebrow: "AI",
+    title: "先判断能跑什么，再决定怎么跑。",
+    description: "本地模型不贪大，运行时状态一目了然。",
+  },
+  settings: {
+    label: "设置",
+    hint: "外观与偏好",
+    eyebrow: "Settings",
+    title: "字体、缩放和偏好设置。",
+    description: "少一些杂讯，多一些一致性。",
   },
 };
 
-export const toolDefinitions: ToolDefinition[] = [
-  {
-    id: "launch_capture",
-    title: "高级截图利器",
-    description: "优先调用 PixPin 或 Snipaste，未安装时回退系统截图。",
-    tag: "截图 / OCR",
-    note: "贴图、长截图、OCR。",
-    tone: "primary",
-  },
-  {
-    id: "one_click_clean",
-    title: "一键清理",
-    description: "安全清理临时文件和常见垃圾。",
-    tag: "系统清理",
-    note: "日常维护首选。",
-  },
-  {
-    id: "creator_deep_clean_all",
-    title: "创作者深度清理",
-    description: "扫描并清理剪映、Adobe、DaVinci、OBS 等缓存。",
-    tag: "创作缓存",
-    note: "重度回血项。",
-  },
+export const homeQuickActions: HomeQuickAction[] = [
+  { id: "launch_capture", title: "截图", description: "区域截图，开箱即用。", tone: "primary" },
+  { id: "one_click_clean", title: "清理", description: "安全清理临时文件。" },
+  { id: "dism_check_health", title: "修复", description: "快速检查系统组件。" },
+  { id: "open_storage", title: "管理空间", description: "查看大文件和大目录。" },
+];
+
+export const systemTools: ToolDefinition[] = [
   {
     id: "dism_check_health",
     title: "DISM 快速检查",
@@ -77,70 +76,86 @@ export const toolDefinitions: ToolDefinition[] = [
   },
   {
     id: "export_drivers",
-    title: "驱动导出备份",
-    description: "一键导出当前驱动到文档目录。",
+    title: "驱动导出",
+    description: "导出当前驱动到文档目录。",
     tag: "驱动备份",
-    note: "装机和交付常用。",
+    note: "重装前常用。",
   },
   {
-    id: "enable_beast_mode",
-    title: "性能野兽模式",
-    description: "切换高性能电源策略，释放更多算力。",
-    tag: "性能释放",
-    note: "渲染和推理适用。",
-  },
-  {
-    id: "restore_balanced_mode",
-    title: "恢复平衡模式",
-    description: "恢复平衡模式，回到日常状态。",
-    tag: "性能恢复",
-    note: "用完记得恢复。",
+    id: "open_windows_update",
+    title: "Windows 更新",
+    description: "直达系统更新页面。",
+    tag: "系统入口",
+    note: "修复前后常用。",
   },
   {
     id: "open_apps_features",
     title: "应用管理",
-    description: "直达 Windows 应用和功能。",
+    description: "直达应用和功能。",
     tag: "系统入口",
-    note: "卸载与清理入口。",
+    note: "卸载更顺手。",
   },
   {
     id: "open_notifications",
     title: "通知净化",
-    description: "直达通知设置，减少系统打扰。",
-    tag: "弹窗治理",
+    description: "快速收敛系统通知。",
+    tag: "系统入口",
     note: "先降噪。",
   },
   {
-    id: "open_windows_update",
-    title: "更新中心",
-    description: "直达 Windows 更新页面。",
-    tag: "系统更新",
-    note: "修复前后常用。",
+    id: "enable_beast_mode",
+    title: "高性能模式",
+    description: "切换高性能电源策略。",
+    tag: "性能模式",
+    note: "渲染与推理适用。",
+    tone: "primary",
   },
   {
-    id: "open_plugin_folder",
-    title: "打开插件目录",
-    description: "打开 Plugins 文件夹并自动准备 manifest。",
-    tag: "插件系统",
-    note: "便携工具入口。",
+    id: "restore_balanced_mode",
+    title: "恢复平衡模式",
+    description: "切回日常电源策略。",
+    tag: "性能模式",
+    note: "用完记得恢复。",
   },
 ];
 
-export const dashboardActionIds: ActionId[] = [
-  "launch_capture",
-  "one_click_clean",
-  "creator_deep_clean_all",
-  "enable_beast_mode",
+export const efficiencyTools: ToolDefinition[] = [
+  {
+    id: "launch_capture",
+    title: "截图中心",
+    description: "区域截图开箱即用，可安装增强组件。",
+    tag: "效率",
+    note: "基础能力内置。",
+    tone: "primary",
+  },
+  {
+    id: "one_click_clean",
+    title: "一键清理",
+    description: "安全清理当前用户临时文件。",
+    tag: "效率",
+    note: "日常维护首选。",
+  },
 ];
 
-export const safetyRails = [
-  "高频能力优先可理解、可回看、可撤退，而不是一键黑盒乱改。",
-  "先做清理、修复、备份和入口整合，再做更深的系统调优。",
-  "AI 模块不仅要能跑，更要懂得在空闲时主动释放内存和显存。",
+export const homeStatusTips = [
+  "默认界面更轻，详细信息按需展开。",
+  "核心功能不依赖手动塞插件。",
+  "截图、清理、修复、空间管理放在首页。",
 ];
 
-export const roadmap = [
-  "首页已经不是静态壳子，而是能真实读取系统、执行动作的控制台。",
-  "插件化架构已就位，后续接入更多便携工具不需要重写主程序。",
-  "创作者清理、空间透视、老板键和本地 AI 面板都围绕“可展示、可交付”打磨。",
+export const settingsGroups = [
+  "外观",
+  "字体",
+  "缩放",
+  "组件管理",
+  "截图保存路径",
+  "日志与关于",
 ];
+
+export const quickPathTargets: Array<{ id: string; label: string; pathKey: "downloads" | "desktop" | "documents" }> = [
+  { id: "downloads", label: "下载", pathKey: "downloads" },
+  { id: "desktop", label: "桌面", pathKey: "desktop" },
+  { id: "documents", label: "文档", pathKey: "documents" },
+];
+
+export const homePrimaryActionIds: ActionId[] = ["launch_capture", "one_click_clean", "dism_check_health"];

@@ -1,20 +1,14 @@
-export type SectionId =
-  | "dashboard"
-  | "common-tools"
-  | "advanced-toolbox"
-  | "ai-local-deploy";
+export type SectionId = "home" | "system" | "efficiency" | "ai" | "settings";
 
 export type ActionId =
   | "launch_capture"
   | "one_click_clean"
-  | "creator_deep_clean_all"
   | "open_apps_features"
   | "open_notifications"
   | "open_windows_update"
   | "dism_check_health"
   | "dism_scan_health"
   | "export_drivers"
-  | "open_plugin_folder"
   | "enable_beast_mode"
   | "restore_balanced_mode";
 
@@ -49,29 +43,6 @@ export type ToolActionResult = {
   warnings: string[];
 };
 
-export type PluginManifest = {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  executable: string;
-  resolvedPath?: string | null;
-  homepage?: string | null;
-  requiresAdmin: boolean;
-  tags: string[];
-  installed: boolean;
-};
-
-export type CreatorCacheTarget = {
-  id: string;
-  name: string;
-  description: string;
-  path: string;
-  exists: boolean;
-  sizeBytes: number;
-  recommended: boolean;
-};
-
 export type StorageHotspot = {
   id: string;
   label: string;
@@ -95,6 +66,22 @@ export type AiChatResponse = {
   answer: string;
 };
 
+export type ComponentManifest = {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  kind: "built-in" | "winget";
+  installed: boolean;
+  statusLabel: string;
+  summary: string;
+  wingetId?: string | null;
+  homepage?: string | null;
+  launchPath?: string | null;
+  launchArguments?: string[] | null;
+  recommended: boolean;
+};
+
 export type SectionConfig = {
   label: string;
   hint: string;
@@ -109,6 +96,13 @@ export type ToolDefinition = {
   description: string;
   tag: string;
   note: string;
+  tone?: "primary" | "default";
+};
+
+export type HomeQuickAction = {
+  id: string;
+  title: string;
+  description: string;
   tone?: "primary" | "default";
 };
 
@@ -128,4 +122,13 @@ export type BossModeViewState = {
   phaseIndex: number;
   isRebooting: boolean;
   instruction: string;
+};
+
+export type AppSettings = {
+  density: "auto" | "compact" | "standard" | "comfortable";
+  scale: "auto" | "compact" | "standard" | "relaxed";
+  fontPreset: "harmony" | "system";
+  startOnBoot: boolean;
+  saveToClipboardFirst: boolean;
+  screenshotFolder: string;
 };
