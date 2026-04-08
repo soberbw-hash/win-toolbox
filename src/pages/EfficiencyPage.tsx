@@ -2,6 +2,7 @@ import { ComponentCenter } from "../ComponentCenter";
 import { bossModeShortcut, quickPathTargets } from "../content";
 import { StorageVisualizer } from "../StorageVisualizer";
 import type {
+  ComponentBusyState,
   ComponentManifest,
   ComponentOperation,
   StorageHotspot,
@@ -10,7 +11,7 @@ import type {
 type EfficiencyPageProps = {
   components: ComponentManifest[];
   hotspots: StorageHotspot[];
-  busyComponentId: string | null;
+  busyState: ComponentBusyState | null;
   captureHelperEnabled: boolean;
   onToggleCaptureHelper: (nextEnabled: boolean) => void;
   onManageComponent: (componentId: string, operation: ComponentOperation) => void;
@@ -28,7 +29,7 @@ const quickPathMap: Record<(typeof quickPathTargets)[number]["pathKey"], string>
 export function EfficiencyPage({
   components,
   hotspots,
-  busyComponentId,
+  busyState,
   captureHelperEnabled,
   onToggleCaptureHelper,
   onManageComponent,
@@ -37,7 +38,7 @@ export function EfficiencyPage({
   onOpenTarget,
 }: EfficiencyPageProps) {
   const capturePlus = components.find((item) => item.id === "capture-plus");
-  const captureBusy = busyComponentId === "capture-plus";
+  const captureBusy = busyState?.componentId === "capture-plus";
 
   const captureStatus = capturePlus?.installed
     ? captureHelperEnabled
@@ -72,6 +73,18 @@ export function EfficiencyPage({
 
             <p>{captureStatus}</p>
             <small>不开启时，仍然可以直接使用 `Win + Shift + S`。</small>
+
+            {captureBusy ? (
+              <div className="component-progress">
+                <div className="component-progress__head">
+                  <span>{busyState?.stageLabel}</span>
+                  <strong>{busyState?.progress}%</strong>
+                </div>
+                <div className="component-progress__bar">
+                  <span style={{ width: `${busyState?.progress ?? 0}%` }} />
+                </div>
+              </div>
+            ) : null}
 
             <div className="button-row">
               <button
@@ -148,10 +161,11 @@ export function EfficiencyPage({
 
       <ComponentCenter
         items={components}
-        busyId={busyComponentId}
+        busyState={busyState}
         hiddenIds={["capture-plus"]}
         onManage={onManageComponent}
         onLaunch={onLaunchComponent}
+        onOpenTarget={onOpenTarget}
       />
     </div>
   );

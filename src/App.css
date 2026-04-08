@@ -357,6 +357,45 @@ code {
   border: 1px solid rgba(185, 121, 38, 0.12);
 }
 
+.startup-banner {
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid rgba(47, 107, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 10px 30px rgba(47, 107, 255, 0.06);
+}
+
+.startup-banner__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.startup-banner p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.startup-progress,
+.component-progress__bar {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(47, 107, 255, 0.1);
+}
+
+.startup-progress span,
+.component-progress__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #2f6bff, #74b6ff);
+  transition: width 220ms ease;
+}
+
 .page-frame,
 .hero-surface__copy,
 .hero-surface__status {
@@ -525,6 +564,79 @@ code {
   font-weight: 600;
 }
 
+.component-card--rich {
+  gap: 14px;
+}
+
+.component-card__title {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.component-card__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.component-card__icon--ai {
+  background: linear-gradient(135deg, #365dff, #74b1ff);
+}
+
+.component-card__icon--network {
+  background: linear-gradient(135deg, #2e7f8f, #6fc0d4);
+}
+
+.component-card__icon--system {
+  background: linear-gradient(135deg, #69748b, #9ba6ba);
+}
+
+.component-card__icon--efficiency {
+  background: linear-gradient(135deg, #4f7cff, #78a9ff);
+}
+
+.component-card__meta,
+.component-card__links,
+.component-progress__head {
+  display: flex;
+  gap: 12px;
+}
+
+.component-card__meta,
+.component-progress__head {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.component-card__meta {
+  flex-wrap: wrap;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.component-card__links {
+  flex-wrap: wrap;
+}
+
+.component-card__link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.component-card__link:hover {
+  text-decoration: underline;
+}
+
 .tool-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -603,6 +715,25 @@ code {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.settings-installed-grid,
+.notice-grid {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.settings-installed-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.notice-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.installed-component-card,
+.notice-card {
+  align-content: start;
+}
+
 .setting-row {
   display: grid;
   gap: 10px;
@@ -652,6 +783,14 @@ code {
 .storage-visual {
   display: grid;
   gap: var(--space-5);
+}
+
+.component-progress {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(47, 107, 255, 0.05);
 }
 
 .storage-visual__summary {
@@ -1054,6 +1193,7 @@ code {
 @media (max-width: 1599px) {
   .home-actions,
   .component-grid,
+  .notice-grid,
   .storage-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1073,6 +1213,7 @@ code {
   .tool-grid--three,
   .split-grid,
   .settings-grid,
+  .settings-installed-grid,
   .stat-strip,
   .storage-visual__summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1127,6 +1268,8 @@ code {
   .quick-path-grid,
   .component-grid,
   .settings-grid,
+  .settings-installed-grid,
+  .notice-grid,
   .stat-strip,
   .storage-visual__summary,
   .storage-list {

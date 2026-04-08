@@ -1,17 +1,37 @@
 import { bossModeShortcut } from "../content";
-import type { AppSettings } from "../types";
+import type {
+  AppSettings,
+  ComponentBusyState,
+  ComponentManifest,
+  ComponentOperation,
+  ThirdPartyNotice,
+} from "../types";
 
 type SettingsPageProps = {
   settings: AppSettings;
+  components: ComponentManifest[];
+  notices: ThirdPartyNotice[];
+  busyState: ComponentBusyState | null;
   onUpdateSettings: (patch: Partial<AppSettings>) => void;
   onEnterBossMode: () => void;
+  onManageComponent: (componentId: string, operation: ComponentOperation) => void;
+  onLaunchComponent: (componentId: string) => void;
+  onOpenTarget: (target: string) => void;
 };
 
 export function SettingsPage({
   settings,
+  components,
+  notices,
+  busyState,
   onUpdateSettings,
   onEnterBossMode,
+  onManageComponent,
+  onLaunchComponent,
+  onOpenTarget,
 }: SettingsPageProps) {
+  const installedComponents = components.filter((item) => item.installed && item.kind !== "built-in");
+
   return (
     <div className="page-stack">
       <section className="surface">
@@ -93,6 +113,154 @@ export function SettingsPage({
               onChange={(event) => onUpdateSettings({ screenshotFolder: event.target.value })}
             />
           </label>
+        </div>
+      </section>
+
+      <section className="surface">
+        <div className="section-head">
+          <div>
+            <p className="section-kicker">Components</p>
+            <h2>已安装组件</h2>
+          </div>
+          <p className="section-copy">组件装好以后，打开、修复、日志和数据目录都在这里。</p>
+        </div>
+
+        {installedComponents.length === 0 ? (
+          <div className="empty-state">还没有检测到已安装组件，去效率页点一下就能开始安装。</div>
+        ) : (
+          <div className="settings-installed-grid">
+            {installedComponents.map((item) => (
+              <article key={item.id} className="soft-card installed-component-card">
+                <div className="history-item__top">
+                  <div>
+                    <h3>{item.name}</h3>
+                    <small>{item.version ? `版本 ${item.version}` : item.category}</small>
+                  </div>
+                  <span className="pill pill--success">{item.statusLabel}</span>
+                </div>
+
+                <p>{item.summary}</p>
+
+                {busyState?.componentId === item.id ? (
+                  <div className="component-progress">
+                    <div className="component-progress__head">
+                      <span>{busyState.stageLabel}</span>
+                      <strong>{busyState.progress}%</strong>
+                    </div>
+                    <div className="component-progress__bar">
+                      <span style={{ width: `${busyState.progress}%` }} />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="button-row">
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={busyState?.componentId === item.id}
+                    onClick={() => onLaunchComponent(item.id)}
+                  >
+                    打开
+                  </button>
+
+                  {item.supportsRepair ? (
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      disabled={busyState?.componentId === item.id}
+                      onClick={() => onManageComponent(item.id, "repair")}
+                    >
+                      修复
+                    </button>
+                  ) : null}
+
+                  {item.supportsUninstall ? (
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      disabled={busyState?.componentId === item.id}
+                      onClick={() => onManageComponent(item.id, "uninstall")}
+                    >
+                      卸载
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="component-card__links">
+                  {item.installDir ? (
+                    <button
+                      className="component-card__link"
+                      type="button"
+                      onClick={() => onOpenTarget(item.installDir!)}
+                    >
+                      数据目录
+                    </button>
+                  ) : null}
+                  {item.logDir ? (
+                    <button
+                      className="component-card__link"
+                      type="button"
+                      onClick={() => onOpenTarget(item.logDir!)}
+                    >
+                      日志目录
+                    </button>
+                  ) : null}
+                  {item.homepage ? (
+                    <button
+                      className="component-card__link"
+                      type="button"
+                      onClick={() => onOpenTarget(item.homepage!)}
+                    >
+                      官方主页
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="surface">
+        <div className="section-head">
+          <div>
+            <p className="section-kicker">Third Party</p>
+            <h2>第三方组件说明</h2>
+          </div>
+          <p className="section-copy">版本、来源和许可证都在这里，方便直接核对。</p>
+        </div>
+
+        <div className="notice-grid">
+          {notices.map((notice) => (
+            <article key={notice.id} className="soft-card notice-card">
+              <div className="history-item__top">
+                <div>
+                  <h3>{notice.name}</h3>
+                  <small>{notice.version}</small>
+                </div>
+                <span className="pill pill--muted">{notice.licenseName}</span>
+              </div>
+              <p>{notice.notes}</p>
+              <div className="component-card__links">
+                <button
+                  className="component-card__link"
+                  type="button"
+                  onClick={() => onOpenTarget(notice.sourceUrl)}
+                >
+                  来源
+                </button>
+                {notice.licenseUrl ? (
+                  <button
+                    className="component-card__link"
+                    type="button"
+                    onClick={() => onOpenTarget(notice.licenseUrl!)}
+                  >
+                    许可证
+                  </button>
+                ) : null}
+              </div>
+            </article>
+          ))}
         </div>
       </section>
 

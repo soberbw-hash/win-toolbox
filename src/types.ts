@@ -12,7 +12,7 @@ export type ActionId =
   | "enable_beast_mode"
   | "restore_balanced_mode";
 
-export type ComponentOperation = "install" | "repair" | "uninstall" | "disable";
+export type ComponentOperation = "install" | "repair" | "uninstall" | "disable" | "update";
 
 export type SystemSnapshot = {
   hostName: string;
@@ -58,7 +58,7 @@ export type AiRuntimeStatus = {
   ollamaInstalled: boolean;
   ollamaRunning: boolean;
   availableModels: string[];
-  openClawDetected: boolean;
+  qclawInstalled: boolean;
   paletteReady: boolean;
   suggestedEntry: string;
 };
@@ -68,20 +68,52 @@ export type AiChatResponse = {
   answer: string;
 };
 
+export type ComponentStatus = "not-installed" | "installed" | "repairable";
+
+export type ComponentBusyState = {
+  componentId: string;
+  operation: ComponentOperation | "launch";
+  stageLabel: string;
+  progress: number;
+};
+
 export type ComponentManifest = {
   id: string;
   name: string;
   description: string;
   category: string;
-  kind: "built-in" | "winget";
+  kind: "built-in" | "winget" | "embedded";
+  status: ComponentStatus;
   installed: boolean;
   statusLabel: string;
   summary: string;
+  version?: string | null;
+  sourceLabel?: string | null;
+  sourceUrl?: string | null;
+  licenseName?: string | null;
+  licenseUrl?: string | null;
+  installSize?: string | null;
   wingetId?: string | null;
   homepage?: string | null;
   launchPath?: string | null;
   launchArguments?: string[] | null;
+  installDir?: string | null;
+  logDir?: string | null;
+  supportsRepair: boolean;
+  supportsUninstall: boolean;
+  supportsUpdate: boolean;
   recommended: boolean;
+};
+
+export type ThirdPartyNotice = {
+  id: string;
+  name: string;
+  version: string;
+  sourceLabel: string;
+  sourceUrl: string;
+  licenseName: string;
+  licenseUrl?: string | null;
+  notes: string;
 };
 
 export type SectionConfig = {

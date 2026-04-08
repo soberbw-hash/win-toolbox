@@ -19,11 +19,13 @@ import type {
   AiChatResponse,
   AiRuntimeStatus,
   BossModeViewState,
+  ComponentBusyState,
   ComponentManifest,
   ComponentOperation,
   SectionId,
   StorageHotspot,
   SystemSnapshot,
+  ThirdPartyNotice,
   ToolActionResult,
 } from "./types";
 import "./App.css";
@@ -33,15 +35,65 @@ type ToastState = {
   tone: "info" | "error";
 } | null;
 
+type StartupState = {
+  visible: boolean;
+  progress: number;
+  title: string;
+  detail: string;
+};
+
+const startupInitialState: StartupState = {
+  visible: true,
+  progress: 8,
+  title: "正在启动 Win Toolbox",
+  detail: "正在准备首页和基础界面。",
+};
+
+const componentStageCatalog: Record<
+  ComponentOperation | "launch",
+  Array<{ progress: number; label: string }>
+> = {
+  install: [
+    { progress: 16, label: "正在准备安装包" },
+    { progress: 46, label: "正在完成安装" },
+    { progress: 82, label: "正在写入组件信息" },
+  ],
+  repair: [
+    { progress: 18, label: "正在校验组件文件" },
+    { progress: 58, label: "正在补齐缺失内容" },
+    { progress: 86, label: "正在恢复组件状态" },
+  ],
+  uninstall: [
+    { progress: 20, label: "正在准备卸载" },
+    { progress: 62, label: "正在移除组件文件" },
+    { progress: 88, label: "正在清理组件状态" },
+  ],
+  disable: [
+    { progress: 30, label: "正在关闭组件进程" },
+    { progress: 86, label: "正在恢复默认状态" },
+  ],
+  update: [
+    { progress: 20, label: "正在检查可用更新" },
+    { progress: 58, label: "正在完成更新" },
+    { progress: 88, label: "正在写入组件信息" },
+  ],
+  launch: [
+    { progress: 34, label: "正在检查启动入口" },
+    { progress: 82, label: "正在启动组件" },
+  ],
+};
+
 function App() {
   const { settings, updateSettings } = useAppSettings();
   const { layoutTier } = useResponsiveLayout();
   const toastTimerRef = useRef<number | null>(null);
+  const componentTimerRef = useRef<number | null>(null);
 
   const [activeSection, setActiveSection] = useState<SectionId>("home");
   const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null);
   const [components, setComponents] = useState<ComponentManifest[]>([]);
   const [hotspots, setHotspots] = useState<StorageHotspot[]>([]);
+  const [thirdPartyNotices, setThirdPartyNotices] = useState<ThirdPartyNotice[]>([]);
   const [aiRuntime, setAiRuntime] = useState<AiRuntimeStatus | null>(null);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiResponse, setAiResponse] = useState<AiChatResponse | null>(null);
@@ -54,13 +106,15 @@ function App() {
   const [lastResult, setLastResult] = useState<ToolActionResult | null>(null);
   const [actionHistory, setActionHistory] = useState<ToolActionResult[]>([]);
   const [runningActionId, setRunningActionId] = useState<string | null>(null);
-  const [busyComponentId, setBusyComponentId] = useState<string | null>(null);
+  const [componentBusyState, setComponentBusyState] = useState<ComponentBusyState | null>(null);
   const [snapshotError, setSnapshotError] = useState("");
   const [toast, setToast] = useState<ToastState>(null);
+  const [startup, setStartup] = useState<StartupState>(startupInitialState);
 
   const activeSectionInfo = sectionCatalog[activeSection];
   const aiAssessment = getAiAssessment(snapshot);
   const capturePlus = components.find((item) => item.id === "capture-plus");
+  const qclawComponent = components.find((item) => item.id === "qclaw");
 
   function pushToast(message: string, tone: "info" | "error" = "info") {
     if (toastTimerRef.current) {
@@ -77,6 +131,45 @@ function App() {
   function recordResult(result: ToolActionResult) {
     setLastResult(result);
     setActionHistory((current) => [result, ...current].slice(0, 12));
+  }
+
+  function beginComponentProgress(componentId: string, operation: ComponentOperation | "launch") {
+    if (componentTimerRef.current) {
+      window.clearInterval(componentTimerRef.current);
+    }
+
+    const stages = componentStageCatalog[operation];
+    let stageIndex = 0;
+
+    setComponentBusyState({
+      componentId,
+      operation,
+      stageLabel: stages[0].label,
+      progress: stages[0].progress,
+    });
+
+    componentTimerRef.current = window.setInterval(() => {
+      stageIndex = Math.min(stageIndex + 1, stages.length - 1);
+      const stage = stages[stageIndex];
+      setComponentBusyState((current) =>
+        current?.componentId === componentId
+          ? {
+              componentId,
+              operation,
+              stageLabel: stage.label,
+              progress: stage.progress,
+            }
+          : current,
+      );
+    }, 1150);
+  }
+
+  function endComponentProgress() {
+    if (componentTimerRef.current) {
+      window.clearInterval(componentTimerRef.current);
+      componentTimerRef.current = null;
+    }
+    setComponentBusyState(null);
   }
 
   async function loadSnapshot() {
@@ -104,8 +197,61 @@ function App() {
     setAiRuntime(next);
   }
 
-  async function refreshCore() {
-    await Promise.all([loadSnapshot(), loadComponents(), loadHotspots(), loadAiRuntime()]);
+  async function loadThirdPartyNotices() {
+    const next = await invoke<ThirdPartyNotice[]>("get_third_party_notices");
+    setThirdPartyNotices(next);
+  }
+
+  async function refreshCore(showStartup = false) {
+    try {
+      if (showStartup) {
+        setStartup({
+          visible: true,
+          progress: 10,
+          title: "正在读取当前机器",
+          detail: "正在检查 CPU、内存、显卡和系统版本。",
+        });
+      }
+
+      await loadSnapshot();
+
+      if (showStartup) {
+        setStartup({
+          visible: true,
+          progress: 46,
+          title: "正在检查组件与本地 AI",
+          detail: "正在同步组件状态、Qclaw、图片查看器和本地运行时。",
+        });
+      }
+
+      await Promise.all([loadComponents(), loadAiRuntime(), loadThirdPartyNotices()]);
+
+      if (showStartup) {
+        setStartup({
+          visible: true,
+          progress: 78,
+          title: "正在扫描空间管理",
+          detail: "正在读取下载、桌面和文档区的大文件热点。",
+        });
+      }
+
+      await loadHotspots();
+
+      if (showStartup) {
+        setStartup({
+          visible: true,
+          progress: 100,
+          title: "准备完成",
+          detail: "首页已经就绪，现在可以直接开始使用。",
+        });
+      }
+    } finally {
+      if (showStartup) {
+        window.setTimeout(() => {
+          setStartup((current) => ({ ...current, visible: false }));
+        }, 240);
+      }
+    }
   }
 
   async function runAction(actionId: ActionId) {
@@ -140,26 +286,26 @@ function App() {
     operation: ComponentOperation,
   ): Promise<ToolActionResult | null> {
     try {
-      setBusyComponentId(componentId);
+      beginComponentProgress(componentId, operation);
       const result = await invoke<ToolActionResult>("manage_component", {
         componentId,
         operation,
       });
       recordResult(result);
       pushToast(result.summary, result.success ? "info" : "error");
-      await Promise.all([loadComponents(), loadAiRuntime()]);
+      await Promise.all([loadComponents(), loadAiRuntime(), loadThirdPartyNotices()]);
       return result;
     } catch (error) {
       pushToast(String(error), "error");
       return null;
     } finally {
-      setBusyComponentId(null);
+      endComponentProgress();
     }
   }
 
   async function launchComponent(componentId: string): Promise<ToolActionResult | null> {
     try {
-      setBusyComponentId(componentId);
+      beginComponentProgress(componentId, "launch");
       const result = await invoke<ToolActionResult>("launch_component", { componentId });
       recordResult(result);
       pushToast(result.summary, result.success ? "info" : "error");
@@ -168,7 +314,7 @@ function App() {
       pushToast(String(error), "error");
       return null;
     } finally {
-      setBusyComponentId(null);
+      endComponentProgress();
     }
   }
 
@@ -266,11 +412,15 @@ function App() {
   }
 
   useEffect(() => {
-    void refreshCore();
+    void refreshCore(true);
 
     return () => {
       if (toastTimerRef.current) {
         window.clearTimeout(toastTimerRef.current);
+      }
+
+      if (componentTimerRef.current) {
+        window.clearInterval(componentTimerRef.current);
       }
     };
   }, []);
@@ -348,6 +498,7 @@ function App() {
             runningActionId={runningActionId}
             hotspots={hotspots}
             lastResult={lastResult}
+            qclawInstalled={Boolean(qclawComponent?.installed)}
             onQuickAction={(actionId) => {
               void handleQuickAction(actionId);
             }}
@@ -368,7 +519,7 @@ function App() {
           <EfficiencyPage
             components={components}
             hotspots={hotspots}
-            busyComponentId={busyComponentId}
+            busyState={componentBusyState}
             captureHelperEnabled={settings.captureHelperEnabled}
             onToggleCaptureHelper={(nextEnabled) => {
               void toggleCaptureHelper(nextEnabled);
@@ -393,10 +544,13 @@ function App() {
             assessment={aiAssessment}
             runtime={aiRuntime}
             response={aiResponse}
-            busyComponentId={busyComponentId}
+            busyState={componentBusyState}
             onOpenPalette={() => setPaletteOpen(true)}
             onManageComponent={(componentId, operation) => {
               void manageComponent(componentId, operation);
+            }}
+            onLaunchComponent={(componentId) => {
+              void launchComponent(componentId);
             }}
             components={components}
           />
@@ -405,9 +559,21 @@ function App() {
         return (
           <SettingsPage
             settings={settings}
+            components={components}
+            notices={thirdPartyNotices}
+            busyState={componentBusyState}
             onUpdateSettings={updateSettings}
             onEnterBossMode={() => {
               void enterBossMode();
+            }}
+            onManageComponent={(componentId, operation) => {
+              void manageComponent(componentId, operation);
+            }}
+            onLaunchComponent={(componentId) => {
+              void launchComponent(componentId);
+            }}
+            onOpenTarget={(target) => {
+              void openTarget(target);
             }}
           />
         );
@@ -494,6 +660,19 @@ function App() {
               </button>
             </div>
           </header>
+
+          {startup.visible ? (
+            <section className="startup-banner">
+              <div className="startup-banner__head">
+                <strong>{startup.title}</strong>
+                <span>{startup.progress}%</span>
+              </div>
+              <p>{startup.detail}</p>
+              <div className="startup-progress">
+                <span style={{ width: `${startup.progress}%` }} />
+              </div>
+            </section>
+          ) : null}
 
           {snapshotError ? (
             <section className="banner banner--warning">

@@ -1,8 +1,8 @@
 {
   "name": "win-toolbox",
   "private": true,
-  "version": "3.2.0",
-  "description": "给中文用户做的极简 Windows 效率控制台：截图、清理、修复、空间管理和本地 AI，一装即用。",
+  "version": "3.3.0",
+  "description": "给中文用户做的极简 Windows 效率控制台：截图、清理、修复、空间管理、Qclaw 和图片查看器，一装即用。",
   "type": "module",
   "scripts": {
     "dev": "vite",

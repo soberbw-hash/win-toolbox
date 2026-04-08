@@ -12,6 +12,7 @@ type HomePageProps = {
   runningActionId: string | null;
   hotspots: StorageHotspot[];
   lastResult: ToolActionResult | null;
+  qclawInstalled: boolean;
   onQuickAction: (actionId: string) => void;
 };
 
@@ -21,6 +22,7 @@ export function HomePage({
   runningActionId,
   hotspots,
   lastResult,
+  qclawInstalled,
   onQuickAction,
 }: HomePageProps) {
   const stats = [
@@ -52,7 +54,7 @@ export function HomePage({
     <div className="page-stack">
       <section className="hero-surface">
         <div className="hero-surface__copy">
-          <p className="section-kicker">WIN TOOLBOX V3.2</p>
+          <p className="section-kicker">WIN TOOLBOX V3.3</p>
           <h1>装好就能用</h1>
           <p>截图、清理、修复、空间管理，四个高频入口都留在第一屏。</p>
         </div>
@@ -61,6 +63,9 @@ export function HomePage({
           <h3>当前状态</h3>
           <p>{snapshot ? `${snapshot.osName} · ${snapshot.hostName}` : "正在读取设备状态"}</p>
           <small>{formatRelativeTime(snapshot?.collectedAt)}</small>
+          <span className={`pill ${qclawInstalled ? "pill--success" : "pill--muted"}`}>
+            {qclawInstalled ? "Qclaw 已安装" : "Qclaw 未安装"}
+          </span>
         </div>
       </section>
 

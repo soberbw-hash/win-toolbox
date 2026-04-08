@@ -167,14 +167,39 @@ struct ComponentManifest {
     description: String,
     category: String,
     kind: String,
+    status: String,
     installed: bool,
     status_label: String,
     summary: String,
+    version: Option<String>,
+    source_label: Option<String>,
+    source_url: Option<String>,
+    license_name: Option<String>,
+    license_url: Option<String>,
+    install_size: Option<String>,
     winget_id: Option<String>,
     homepage: Option<String>,
     launch_path: Option<String>,
     launch_arguments: Option<Vec<String>>,
+    install_dir: Option<String>,
+    log_dir: Option<String>,
+    supports_repair: bool,
+    supports_uninstall: bool,
+    supports_update: bool,
     recommended: bool,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ThirdPartyNotice {
+    id: String,
+    name: String,
+    version: String,
+    source_label: String,
+    source_url: String,
+    license_name: String,
+    license_url: Option<String>,
+    notes: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -206,7 +231,7 @@ struct AiRuntimeStatus {
     ollama_installed: bool,
     ollama_running: bool,
     available_models: Vec<String>,
-    open_claw_detected: bool,
+    qclaw_installed: bool,
     palette_ready: bool,
     suggested_entry: String,
 }
@@ -249,14 +274,25 @@ struct ComponentDefinition {
     description: &'static str,
     category: &'static str,
     kind: &'static str,
+    version: Option<&'static str>,
+    source_label: Option<&'static str>,
+    source_url: Option<&'static str>,
+    license_name: Option<&'static str>,
+    license_url: Option<&'static str>,
+    install_size: Option<&'static str>,
     winget_id: Option<&'static str>,
     homepage: Option<&'static str>,
     detect_paths: Vec<PathBuf>,
     launch_arguments: Vec<String>,
+    install_dir_name: Option<&'static str>,
     recommended: bool,
     installed: bool,
+    status: String,
     status_label: String,
     summary: String,
+    supports_repair: bool,
+    supports_uninstall: bool,
+    supports_update: bool,
 }
 
 fn workspace_root() -> Option<PathBuf> {
@@ -337,6 +373,24 @@ fn component_root() -> PathBuf {
         .unwrap_or_else(documents_dir)
         .join("WinToolbox")
         .join("Components")
+}
+
+fn component_logs_root() -> PathBuf {
+    local_app_data_dir()
+        .unwrap_or_else(documents_dir)
+        .join("WinToolbox")
+        .join("logs")
+        .join("components")
+}
+
+fn component_storage_dir(component: &ComponentDefinition) -> Option<PathBuf> {
+    component
+        .install_dir_name
+        .map(|folder| component_root().join(folder))
+}
+
+fn component_log_dir(component: &ComponentDefinition) -> PathBuf {
+    component_logs_root().join(component.id)
 }
 
 fn ensure_default_plugin_assets(plugin_dir: &Path) -> Result<(), String> {
@@ -452,6 +506,46 @@ fn snipaste_detect_paths() -> Vec<PathBuf> {
     if let Some(program_files) = program_files_dir() {
         paths.push(program_files.join("Snipaste").join("Snipaste.exe"));
         paths.extend(search_paths_for_executable(&program_files, "Snipaste.exe", 3));
+    }
+
+    paths
+}
+
+fn qclaw_detect_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    if let Some(local) = local_app_data_dir() {
+        paths.push(local.join("Programs").join("QClaw").join("QClaw.exe"));
+        paths.extend(search_paths_for_executable(
+            &local.join("Microsoft").join("WinGet").join("Packages"),
+            "QClaw.exe",
+            4,
+        ));
+    }
+
+    if let Some(program_files) = program_files_dir() {
+        paths.push(program_files.join("QClaw").join("QClaw.exe"));
+        paths.extend(search_paths_for_executable(&program_files, "QClaw.exe", 3));
+    }
+
+    paths
+}
+
+fn honeyview_detect_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    if let Some(local) = local_app_data_dir() {
+        paths.push(local.join("Honeyview").join("Honeyview.exe"));
+        paths.extend(search_paths_for_executable(
+            &local.join("Microsoft").join("WinGet").join("Packages"),
+            "Honeyview.exe",
+            4,
+        ));
+    }
+
+    if let Some(program_files) = program_files_dir() {
+        paths.push(program_files.join("Honeyview").join("Honeyview.exe"));
+        paths.extend(search_paths_for_executable(&program_files, "Honeyview.exe", 3));
     }
 
     paths
@@ -585,15 +679,32 @@ fn build_component_definition(
     name: &'static str,
     description: &'static str,
     category: &'static str,
+    version: Option<&'static str>,
+    source_label: Option<&'static str>,
+    source_url: Option<&'static str>,
+    license_name: Option<&'static str>,
+    license_url: Option<&'static str>,
+    install_size: Option<&'static str>,
     winget_id: Option<&'static str>,
     homepage: Option<&'static str>,
     detect_paths: Vec<PathBuf>,
     launch_arguments: Vec<String>,
+    install_dir_name: Option<&'static str>,
     recommended: bool,
+    supports_repair: bool,
+    supports_uninstall: bool,
+    supports_update: bool,
 ) -> ComponentDefinition {
     let launch_path = find_first_existing_path(&detect_paths);
-    let installed =
-        launch_path.is_some() || winget_id.map(winget_package_installed).unwrap_or(false);
+    let winget_installed = winget_id.map(winget_package_installed).unwrap_or(false);
+    let installed = launch_path.is_some() || winget_installed;
+    let status = if installed && launch_path.is_none() && winget_id.is_some() {
+        "repairable".to_string()
+    } else if installed {
+        "installed".to_string()
+    } else {
+        "not-installed".to_string()
+    };
 
     ComponentDefinition {
         id,
@@ -601,28 +712,45 @@ fn build_component_definition(
         description,
         category,
         kind: if winget_id.is_some() { "winget" } else { "built-in" },
+        version,
+        source_label,
+        source_url,
+        license_name,
+        license_url,
+        install_size,
         winget_id,
         homepage,
         detect_paths,
         launch_arguments,
+        install_dir_name,
         recommended,
         installed,
-        status_label: if installed {
+        status: status.clone(),
+        status_label: if status == "repairable" {
+            "可修复".to_string()
+        } else if installed {
             "可用".to_string()
         } else {
             "未安装".to_string()
         },
-        summary: if installed {
+        summary: if status == "repairable" {
+            format!("{name} 的组件文件缺失或入口异常，可点击修复恢复。")
+        } else if installed {
             format!("{name} 已就绪，可以直接使用。")
         } else if winget_id.is_some() {
             format!("{name} 支持一键安装，装好就能直接用。")
         } else {
             format!("{name} 已内置在主程序中。")
         },
+        supports_repair,
+        supports_uninstall,
+        supports_update,
     }
 }
 
-fn list_components_internal() -> Vec<ComponentManifest> {
+fn component_definitions_internal() -> Vec<ComponentDefinition> {
+    let ollama_installed = command_exists("ollama");
+
     let mut components = vec![
         ComponentDefinition {
             id: "capture-core",
@@ -630,46 +758,129 @@ fn list_components_internal() -> Vec<ComponentManifest> {
             description: "系统截图已经内置，装好就能直接用。",
             category: "基础能力",
             kind: "built-in",
+            version: None,
+            source_label: None,
+            source_url: None,
+            license_name: None,
+            license_url: None,
+            install_size: None,
             winget_id: None,
             homepage: None,
             detect_paths: Vec::new(),
             launch_arguments: Vec::new(),
+            install_dir_name: None,
             recommended: true,
             installed: true,
+            status: "installed".to_string(),
             status_label: "可用".to_string(),
             summary: "区域截图开箱即用。".to_string(),
+            supports_repair: false,
+            supports_uninstall: false,
+            supports_update: false,
         },
+        build_component_definition(
+            "qclaw",
+            "Qclaw 桌面助手",
+            "一键部署 Qclaw，自动准备运行环境并完成基础配置。",
+            "AI 组件",
+            Some("0.2.3"),
+            Some("winget · 腾讯官方安装包"),
+            Some("https://qclaw.qq.com/"),
+            Some("专有软件"),
+            Some("https://rule.tencent.com/rule/202603060002"),
+            None,
+            Some("Tencent.QClaw"),
+            Some("https://qclaw.qq.com/"),
+            qclaw_detect_paths(),
+            Vec::new(),
+            Some("Qclaw"),
+            true,
+            true,
+            true,
+            true,
+        ),
+        build_component_definition(
+            "image-viewer",
+            "图片查看器",
+            "一键安装轻量图片查看器，快速打开图片、动图和压缩包内图片。",
+            "效率组件",
+            Some("5.53"),
+            Some("winget · Honeyview"),
+            Some("https://en.bandisoft.com/honeyview/"),
+            Some("Freeware"),
+            Some("https://en.bandisoft.com/honeyview/eula"),
+            None,
+            Some("Bandisoft.Honeyview"),
+            Some("https://en.bandisoft.com/honeyview/"),
+            honeyview_detect_paths(),
+            Vec::new(),
+            Some("ImageViewer"),
+            true,
+            false,
+            true,
+            false,
+        ),
         build_component_definition(
             "capture-plus",
             "Snipaste 截图增强",
             "一键安装 Snipaste，开启后按 F1 截图，按 F3 贴图。",
             "截图增强",
+            Some("2.11.3"),
+            Some("winget · Snipaste"),
+            Some("https://www.snipaste.com/"),
+            Some("Freemium"),
+            Some("https://docs.snipaste.com/pro"),
+            None,
             Some("liule.Snipaste"),
             Some("https://www.snipaste.com/"),
             snipaste_detect_paths(),
             Vec::new(),
+            Some("Snipaste"),
             true,
+            true,
+            true,
+            false,
         ),
         build_component_definition(
             "everything-search",
             "Everything 搜索增强",
             "安装 Everything，让文件搜索和空间定位更顺手。",
             "效率增强",
+            None,
+            Some("winget · voidtools"),
+            Some("https://www.voidtools.com/"),
+            Some("专有免费软件"),
+            None,
+            None,
             Some("voidtools.Everything"),
             Some("https://www.voidtools.com/"),
             everything_detect_paths(),
             Vec::new(),
+            Some("Everything"),
+            false,
             true,
+            true,
+            false,
         ),
         build_component_definition(
             "context-menu-manager",
             "右键菜单管理",
             "一键安装右键菜单管理器，方便清理和整理系统右键项。",
             "效率增强",
+            None,
+            Some("winget · BluePointLilac"),
+            Some("https://github.com/BluePointLilac/ContextMenuManager"),
+            Some("开源软件"),
+            None,
+            None,
             Some("BluePointLilac.ContextMenuManager"),
             Some("https://github.com/BluePointLilac/ContextMenuManager"),
             context_menu_manager_detect_paths(),
             Vec::new(),
+            Some("ContextMenuManager"),
+            false,
+            false,
+            true,
             false,
         ),
         build_component_definition(
@@ -677,10 +888,20 @@ fn list_components_internal() -> Vec<ComponentManifest> {
             "压缩解压增强",
             "安装 7-Zip，补齐常见压缩格式支持。",
             "效率增强",
+            None,
+            Some("winget · 7-Zip"),
+            Some("https://www.7-zip.org/"),
+            Some("开源软件"),
+            Some("https://www.7-zip.org/license.txt"),
+            None,
             Some("7zip.7zip"),
             Some("https://www.7-zip.org/"),
             seven_zip_detect_paths(),
             Vec::new(),
+            Some("ArchiveTools"),
+            false,
+            false,
+            true,
             false,
         ),
         build_component_definition(
@@ -688,10 +909,20 @@ fn list_components_internal() -> Vec<ComponentManifest> {
             "Clash Verge Rev",
             "一键安装 Clash Verge Rev，装好后就能直接打开使用。",
             "网络增强",
+            None,
+            Some("winget · Clash Verge Rev"),
+            Some("https://github.com/clash-verge-rev/clash-verge-rev"),
+            Some("GPL-3.0"),
+            Some("https://github.com/clash-verge-rev/clash-verge-rev/blob/main/LICENSE"),
+            None,
             Some("ClashVergeRev.ClashVergeRev"),
             Some("https://github.com/clash-verge-rev/clash-verge-rev"),
             clash_verge_detect_paths(),
             Vec::new(),
+            Some("ClashVergeRev"),
+            true,
+            true,
+            true,
             true,
         ),
         build_component_definition(
@@ -699,21 +930,41 @@ fn list_components_internal() -> Vec<ComponentManifest> {
             "软件卸载增强",
             "一键安装 BCUninstaller，更彻底地卸载软件并清理残留。",
             "系统增强",
+            Some("6.1"),
+            Some("winget · BCUninstaller"),
+            Some("https://www.bcuninstaller.com/"),
+            Some("Apache-2.0"),
+            Some("https://github.com/Klocman/Bulk-Crap-Uninstaller/blob/master/LICENSE"),
+            None,
             Some("Klocman.BulkCrapUninstaller"),
             Some("https://www.bcuninstaller.com/"),
             bcuninstaller_detect_paths(),
             Vec::new(),
+            Some("BCUninstaller"),
             true,
+            false,
+            true,
+            false,
         ),
         build_component_definition(
             "powertoys-suite",
             "PowerToys",
             "安装 PowerToys，补齐系统效率工具集。",
             "效率增强",
+            None,
+            Some("winget · Microsoft"),
+            Some("https://github.com/microsoft/PowerToys"),
+            Some("MIT"),
+            Some("https://github.com/microsoft/PowerToys/blob/main/LICENSE"),
+            None,
             Some("Microsoft.PowerToys"),
             Some("https://github.com/microsoft/PowerToys"),
             powertoys_detect_paths(),
             Vec::new(),
+            Some("PowerToys"),
+            false,
+            false,
+            true,
             false,
         ),
         ComponentDefinition {
@@ -722,22 +973,37 @@ fn list_components_internal() -> Vec<ComponentManifest> {
             description: "本地 AI 运行时，安装后就能接入本地模型。",
             category: "AI",
             kind: "winget",
+            version: None,
+            source_label: Some("winget · Ollama"),
+            source_url: Some("https://ollama.com/"),
+            license_name: Some("专有免费软件"),
+            license_url: None,
+            install_size: None,
             winget_id: Some("Ollama.Ollama"),
             homepage: Some("https://ollama.com/"),
             detect_paths: Vec::new(),
             launch_arguments: Vec::new(),
+            install_dir_name: Some("Ollama"),
             recommended: true,
-            installed: command_exists("ollama"),
-            status_label: if command_exists("ollama") {
+            installed: ollama_installed,
+            status: if ollama_installed {
+                "installed".to_string()
+            } else {
+                "not-installed".to_string()
+            },
+            status_label: if ollama_installed {
                 "可用".to_string()
             } else {
                 "未安装".to_string()
             },
-            summary: if command_exists("ollama") {
+            summary: if ollama_installed {
                 "已经检测到 Ollama，可以继续拉取本地模型。".to_string()
             } else {
                 "未检测到 Ollama，支持一键安装。".to_string()
             },
+            supports_repair: true,
+            supports_uninstall: true,
+            supports_update: true,
         },
     ];
 
@@ -751,31 +1017,160 @@ fn list_components_internal() -> Vec<ComponentManifest> {
     });
 
     components
+}
+
+fn list_components_internal() -> Vec<ComponentManifest> {
+    component_definitions_internal()
         .into_iter()
-        .map(|item| ComponentManifest {
-            id: item.id.to_string(),
-            name: item.name.to_string(),
-            description: item.description.to_string(),
-            category: item.category.to_string(),
-            kind: item.kind.to_string(),
-            installed: item.installed,
-            status_label: item.status_label,
-            summary: item.summary,
-            winget_id: item.winget_id.map(|value| value.to_string()),
-            homepage: item.homepage.map(|value| value.to_string()),
-            launch_path: find_first_existing_path(&item.detect_paths)
-                .map(|path| path.to_string_lossy().to_string()),
-            launch_arguments: if item.launch_arguments.is_empty() {
-                None
-            } else {
-                Some(item.launch_arguments)
-            },
-            recommended: item.recommended,
+        .map(|item| {
+            let launch_path = find_first_existing_path(&item.detect_paths)
+                .map(|path| path.to_string_lossy().to_string());
+            let install_dir = component_storage_dir(&item)
+                .map(|path| path.to_string_lossy().to_string());
+            let log_dir = Some(component_log_dir(&item).to_string_lossy().to_string());
+
+            ComponentManifest {
+                id: item.id.to_string(),
+                name: item.name.to_string(),
+                description: item.description.to_string(),
+                category: item.category.to_string(),
+                kind: item.kind.to_string(),
+                status: item.status,
+                installed: item.installed,
+                status_label: item.status_label,
+                summary: item.summary,
+                version: item.version.map(|value| value.to_string()),
+                source_label: item.source_label.map(|value| value.to_string()),
+                source_url: item.source_url.map(|value| value.to_string()),
+                license_name: item.license_name.map(|value| value.to_string()),
+                license_url: item.license_url.map(|value| value.to_string()),
+                install_size: item.install_size.map(|value| value.to_string()),
+                winget_id: item.winget_id.map(|value| value.to_string()),
+                homepage: item.homepage.map(|value| value.to_string()),
+                launch_path,
+                launch_arguments: if item.launch_arguments.is_empty() {
+                    None
+                } else {
+                    Some(item.launch_arguments)
+                },
+                install_dir,
+                log_dir,
+                supports_repair: item.supports_repair,
+                supports_uninstall: item.supports_uninstall,
+                supports_update: item.supports_update,
+                recommended: item.recommended,
+            }
         })
         .collect()
 }
 
-fn install_component_internal(component_id: &str) -> Result<ToolActionResult, String> {
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredComponentManifest {
+    id: String,
+    name: String,
+    version: String,
+    kind: String,
+    install_dir: String,
+    entry: String,
+    display_name: String,
+    category: String,
+    supports_repair: bool,
+    supports_uninstall: bool,
+    supports_update: bool,
+}
+
+fn persist_component_state(component: &ComponentManifest) -> Result<Option<PathBuf>, String> {
+    let install_dir = match component.install_dir.as_ref() {
+        Some(path) => PathBuf::from(path),
+        None => return Ok(None),
+    };
+
+    fs::create_dir_all(&install_dir)
+        .map_err(|error| format!("无法创建组件数据目录 {}: {error}", install_dir.display()))?;
+
+    let manifest_path = install_dir.join("component_manifest.json");
+    let entry = component
+        .launch_path
+        .as_ref()
+        .and_then(|path| Path::new(path).file_name())
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| format!("{}.exe", component.name.replace(' ', "")));
+
+    let stored = StoredComponentManifest {
+        id: component.id.clone(),
+        name: component.name.clone(),
+        version: component
+            .version
+            .clone()
+            .unwrap_or_else(|| "当前版本".to_string()),
+        kind: component.kind.clone(),
+        install_dir: install_dir.to_string_lossy().to_string(),
+        entry,
+        display_name: component.name.clone(),
+        category: component.category.clone(),
+        supports_repair: component.supports_repair,
+        supports_uninstall: component.supports_uninstall,
+        supports_update: component.supports_update,
+    };
+
+    let raw = serde_json::to_string_pretty(&stored)
+        .map_err(|error| format!("无法序列化组件信息：{error}"))?;
+    fs::write(&manifest_path, raw)
+        .map_err(|error| format!("无法写入组件信息：{error}"))?;
+
+    Ok(Some(manifest_path))
+}
+
+fn remove_component_state(component: &ComponentManifest) -> Result<(), String> {
+    if let Some(path) = component.install_dir.as_ref() {
+        let install_dir = PathBuf::from(path);
+        if install_dir.exists() {
+            fs::remove_dir_all(&install_dir)
+                .map_err(|error| format!("无法删除组件数据目录 {}: {error}", install_dir.display()))?;
+        }
+    }
+
+    Ok(())
+}
+
+fn write_component_log(component: &ComponentManifest, action: &str, content: &str) -> Result<PathBuf, String> {
+    let log_dir = component
+        .log_dir
+        .as_ref()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| component_logs_root().join(&component.id));
+
+    fs::create_dir_all(&log_dir)
+        .map_err(|error| format!("无法创建组件日志目录 {}: {error}", log_dir.display()))?;
+
+    let log_path = log_dir.join(format!("{action}.log"));
+    let entry = format!(
+        "[{}]\n{}\n\n",
+        chrono_like_timestamp(),
+        content.trim()
+    );
+
+    use std::io::Write;
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|error| format!("无法写入组件日志 {}: {error}", log_path.display()))?;
+    file.write_all(entry.as_bytes())
+        .map_err(|error| format!("无法写入组件日志 {}: {error}", log_path.display()))?;
+
+    Ok(log_path)
+}
+
+fn chrono_like_timestamp() -> String {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => format!("unix-{}", duration.as_secs()),
+        Err(_) => "unix-0".to_string(),
+    }
+}
+
+fn run_component_install(component_id: &str, repair: bool) -> Result<ToolActionResult, String> {
     let started_at = Instant::now();
     let components = list_components_internal();
     let component = components
@@ -783,7 +1178,7 @@ fn install_component_internal(component_id: &str) -> Result<ToolActionResult, St
         .find(|item| item.id == component_id)
         .ok_or_else(|| format!("未找到组件：{component_id}"))?;
 
-    if component.installed {
+    if component.installed && !repair && component.status != "repairable" {
         return Ok(build_action_result(
             "install_component",
             "安装组件",
@@ -801,41 +1196,93 @@ fn install_component_internal(component_id: &str) -> Result<ToolActionResult, St
         .clone()
         .ok_or_else(|| "该组件暂不支持独立安装。".to_string())?;
 
-    let capture = run_command_capture(
-        "winget",
-        &[
-            "install",
-            "--id",
-            &winget_id,
-            "-e",
-            "--accept-package-agreements",
-            "--accept-source-agreements",
-            "--disable-interactivity",
-        ],
+    let mut args = vec![
+        "install",
+        "--id",
+        winget_id.as_str(),
+        "-e",
+        "--accept-package-agreements",
+        "--accept-source-agreements",
+        "--disable-interactivity",
+    ];
+
+    if repair {
+        args.push("--force");
+    }
+
+    let capture = run_command_capture("winget", &args)?;
+    let refreshed_component = list_components_internal()
+        .into_iter()
+        .find(|item| item.id == component_id)
+        .unwrap_or(component.clone());
+
+    let manifest_path = if capture.success {
+        persist_component_state(&refreshed_component)?
+    } else {
+        None
+    };
+
+    let log_path = write_component_log(
+        &refreshed_component,
+        if repair { "repair" } else { "install" },
+        &format!(
+            "组件：{}\n操作：{}\n结果：{}\n{}\n{}",
+            refreshed_component.name,
+            if repair { "修复" } else { "安装" },
+            if capture.success { "成功" } else { "失败" },
+            refreshed_component.summary,
+            format_process_details(&capture)
+        ),
     )?;
 
     let summary = if capture.success {
-        if component.id == "capture-plus" {
+        if refreshed_component.id == "capture-plus" {
             "Snipaste 安装完成，开启后按 F1 截图，按 F3 贴图。".to_string()
+        } else if refreshed_component.id == "qclaw" {
+            "Qclaw 已安装完成，现在可以直接打开使用。".to_string()
+        } else if refreshed_component.id == "image-viewer" {
+            "图片查看器已安装完成，现在可以快速打开图片。".to_string()
+        } else if repair {
+            format!("{} 已修复完成。", refreshed_component.name)
         } else {
-            format!("{} 安装完成。", component.name)
+            format!("{} 安装完成。", refreshed_component.name)
         }
     } else {
-        format!("{} 安装失败。", component.name)
+        if repair {
+            format!("{} 修复失败。", refreshed_component.name)
+        } else {
+            format!("{} 安装失败。", refreshed_component.name)
+        }
     };
 
     Ok(build_action_result(
-        "install_component",
-        "安装组件",
+        if repair { "repair_component" } else { "install_component" },
+        if repair { "修复组件" } else { "安装组件" },
         capture.success,
         summary,
-        format_process_details(&capture),
-        None,
+        format!(
+            "{}\n\n组件状态文件：{}\n组件日志：{}",
+            format_process_details(&capture),
+            manifest_path
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "未写入".to_string()),
+            log_path.display()
+        ),
+        Some(log_path.to_string_lossy().to_string()),
         vec![String::from(
             "如果安装过程中弹出系统确认，请允许安装继续执行。",
         )],
         started_at,
     ))
+}
+
+fn install_component_internal(component_id: &str) -> Result<ToolActionResult, String> {
+    run_component_install(component_id, false)
+}
+
+fn repair_component_internal(component_id: &str) -> Result<ToolActionResult, String> {
+    run_component_install(component_id, true)
 }
 
 fn uninstall_component_internal(component_id: &str) -> Result<ToolActionResult, String> {
@@ -863,6 +1310,18 @@ fn uninstall_component_internal(component_id: &str) -> Result<ToolActionResult, 
         ],
     )?;
 
+    let _ = remove_component_state(&component);
+    let log_path = write_component_log(
+        &component,
+        "uninstall",
+        &format!(
+            "组件：{}\n操作：卸载\n结果：{}\n{}",
+            component.name,
+            if capture.success { "成功" } else { "失败" },
+            format_process_details(&capture)
+        ),
+    )?;
+
     Ok(build_action_result(
         "uninstall_component",
         "卸载组件",
@@ -872,8 +1331,8 @@ fn uninstall_component_internal(component_id: &str) -> Result<ToolActionResult, 
         } else {
             format!("{} 卸载失败。", component.name)
         },
-        format_process_details(&capture),
-        None,
+        format!("{}\n\n组件日志：{}", format_process_details(&capture), log_path.display()),
+        Some(log_path.to_string_lossy().to_string()),
         vec![String::from(
             "部分组件卸载后可能还需要手动关闭相关进程。",
         )],
@@ -892,9 +1351,21 @@ fn launch_component_internal(component_id: &str) -> Result<ToolActionResult, Str
     if let Some(launch_path) = component.launch_path.clone() {
         let args = component.launch_arguments.clone().unwrap_or_default();
         spawn_detached_path(Path::new(&launch_path), &args)?;
+        let log_path = write_component_log(
+            &component,
+            "launch",
+            &format!(
+                "组件：{}\n操作：启动\n结果：成功\n执行文件：{}",
+                component.name, launch_path
+            ),
+        )?;
 
         let summary = if component.id == "capture-plus" {
             "Snipaste 已启动。按 F1 截图，按 F3 贴图。".to_string()
+        } else if component.id == "qclaw" {
+            "Qclaw 已启动。扫码绑定后就能直接开始使用。".to_string()
+        } else if component.id == "image-viewer" {
+            "图片查看器已启动。现在可以直接拖图进去查看。".to_string()
         } else {
             format!("已启动 {}。", component.name)
         };
@@ -904,9 +1375,20 @@ fn launch_component_internal(component_id: &str) -> Result<ToolActionResult, Str
             "启动组件",
             true,
             summary,
-            format!("执行文件：{launch_path}"),
-            Some(launch_path),
+            format!("执行文件：{launch_path}\n组件日志：{}", log_path.display()),
+            Some(log_path.to_string_lossy().to_string()),
             Vec::new(),
+            started_at,
+        ))
+    } else if component.installed || component.status == "repairable" {
+        Ok(build_action_result(
+            "launch_component",
+            "启动组件",
+            false,
+            "组件文件缺失，可点击修复后重试。",
+            component.summary,
+            component.install_dir,
+            vec![String::from("Win Toolbox 检测到安装记录还在，但启动入口已经丢失。")],
             started_at,
         ))
     } else if let Some(homepage) = component.homepage.clone() {
@@ -937,6 +1419,20 @@ fn disable_component_internal(component_id: &str) -> Result<ToolActionResult, St
     };
 
     let capture = run_command_capture("taskkill", &["/IM", process_name, "/F"])?;
+    let component = list_components_internal()
+        .into_iter()
+        .find(|item| item.id == component_id)
+        .ok_or_else(|| format!("未找到组件：{component_id}"))?;
+    let log_path = write_component_log(
+        &component,
+        "disable",
+        &format!(
+            "组件：{}\n操作：关闭\n结果：{}\n{}",
+            component.name,
+            if capture.success { "成功" } else { "失败" },
+            format_process_details(&capture)
+        ),
+    )?;
 
     Ok(build_action_result(
         "disable_component",
@@ -947,8 +1443,8 @@ fn disable_component_internal(component_id: &str) -> Result<ToolActionResult, St
         } else {
             format!("未能关闭 {process_name}。")
         },
-        format_process_details(&capture),
-        None,
+        format!("{}\n\n组件日志：{}", format_process_details(&capture), log_path.display()),
+        Some(log_path.to_string_lossy().to_string()),
         Vec::new(),
         started_at,
     ))
@@ -1059,13 +1555,19 @@ fn get_ai_runtime_status_internal() -> AiRuntimeStatus {
         (false, Vec::new())
     };
 
-    let open_claw_detected = component_root().join("OpenClaw").exists();
+    let qclaw_installed = list_components_internal()
+        .into_iter()
+        .find(|item| item.id == "qclaw")
+        .map(|item| item.installed)
+        .unwrap_or(false);
 
     let palette_ready = ollama_installed && !available_models.is_empty();
     let suggested_entry = if !ollama_installed {
         "未检测到 Ollama。先装好本地运行时，AI 灵感悬浮窗才会解锁。".to_string()
     } else if available_models.is_empty() {
         "已经检测到 Ollama，但还没有模型。先拉一个 Qwen 模型再使用悬浮窗。".to_string()
+    } else if !qclaw_installed {
+        "本地模型已可用。如果想要桌面助手体验，可以在组件中心一键安装 Qclaw。".to_string()
     } else if !ollama_running {
         "检测到本地模型，灵感悬浮窗可用；首次提问时会自动拉起本地推理。".to_string()
     } else {
@@ -1076,10 +1578,42 @@ fn get_ai_runtime_status_internal() -> AiRuntimeStatus {
         ollama_installed,
         ollama_running,
         available_models,
-        open_claw_detected,
+        qclaw_installed,
         palette_ready,
         suggested_entry,
     }
+}
+
+fn get_third_party_notices_internal() -> Vec<ThirdPartyNotice> {
+    list_components_internal()
+        .into_iter()
+        .filter(|item| item.kind != "built-in")
+        .filter_map(|item| {
+            let source_url = item
+                .source_url
+                .clone()
+                .or_else(|| item.homepage.clone())?;
+            let source_label = item
+                .source_label
+                .clone()
+                .unwrap_or_else(|| "官方来源".to_string());
+            let license_name = item
+                .license_name
+                .clone()
+                .unwrap_or_else(|| "请查看官网说明".to_string());
+
+            Some(ThirdPartyNotice {
+                id: item.id,
+                name: item.name,
+                version: item.version.unwrap_or_else(|| "当前可用版本".to_string()),
+                source_label,
+                source_url,
+                license_name,
+                license_url: item.license_url,
+                notes: item.summary,
+            })
+        })
+        .collect()
 }
 
 fn format_process_details(capture: &ProcessCapture) -> String {
@@ -1888,6 +2422,28 @@ fn list_components() -> Result<Vec<ComponentManifest>, String> {
 }
 
 #[tauri::command]
+fn get_third_party_notices() -> Result<Vec<ThirdPartyNotice>, String> {
+    Ok(get_third_party_notices_internal())
+}
+
+#[tauri::command]
+fn get_component_logs(component_id: String) -> Result<Vec<String>, String> {
+    let log_dir = component_logs_root().join(&component_id);
+    if !log_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut logs = fs::read_dir(&log_dir)
+        .map_err(|error| format!("无法读取组件日志目录：{error}"))?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path().to_string_lossy().to_string())
+        .collect::<Vec<_>>();
+
+    logs.sort();
+    Ok(logs)
+}
+
+#[tauri::command]
 async fn run_tool_action(action_id: String) -> Result<ToolActionResult, String> {
     tauri::async_runtime::spawn_blocking(move || execute_tool_action(&action_id))
         .await
@@ -1911,8 +2467,10 @@ async fn launch_component(component_id: String) -> Result<ToolActionResult, Stri
 #[tauri::command]
 async fn manage_component(component_id: String, operation: String) -> Result<ToolActionResult, String> {
     tauri::async_runtime::spawn_blocking(move || match operation.as_str() {
-        "install" | "repair" => install_component_internal(&component_id),
+        "install" => install_component_internal(&component_id),
+        "repair" => repair_component_internal(&component_id),
         "uninstall" => uninstall_component_internal(&component_id),
+        "update" => repair_component_internal(&component_id),
         "disable" => disable_component_internal(&component_id),
         _ => Err(format!("未知组件操作：{operation}")),
     })
@@ -1938,7 +2496,7 @@ async fn scan_storage_hotspots() -> Result<Vec<StorageHotspot>, String> {
 async fn get_ai_runtime_status() -> Result<AiRuntimeStatus, String> {
     tauri::async_runtime::spawn_blocking(get_ai_runtime_status_internal)
         .await
-        .map_err(|error| format!("璇诲彇 AI 杩愯鏃剁姸鎬佸け璐ワ細{error}"))
+        .map_err(|error| format!("读取 AI 运行时状态失败：{error}"))
 }
 
 #[tauri::command]
@@ -1955,6 +2513,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_system_snapshot,
             list_components,
+            get_third_party_notices,
+            get_component_logs,
             run_tool_action,
             launch_component,
             manage_component,

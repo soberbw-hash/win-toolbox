@@ -1,6 +1,6 @@
 [package]
 name = "win-toolbox"
-version = "3.2.0"
+version = "3.3.0"
 description = "给中文用户做的极简 Windows 效率控制台。"
 authors = ["soberbw-hash"]
 edition = "2021"
