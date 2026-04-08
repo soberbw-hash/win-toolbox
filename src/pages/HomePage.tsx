@@ -52,9 +52,9 @@ export function HomePage({
     <div className="page-stack">
       <section className="hero-surface">
         <div className="hero-surface__copy">
-          <p className="section-kicker">Win Toolbox V3</p>
-          <h1>少一点噪音，多一点顺手。</h1>
-          <p>首页只保留截图、清理、修复、管理空间四个入口，其他能力全部收进二级页。</p>
+          <p className="section-kicker">WIN TOOLBOX V3.2</p>
+          <h1>装好就能用</h1>
+          <p>截图、清理、修复、空间管理，四个高频入口都留在第一屏。</p>
         </div>
 
         <div className="hero-surface__status soft-card">
@@ -67,10 +67,10 @@ export function HomePage({
       <section className="surface">
         <div className="section-head">
           <div>
-            <p className="section-kicker">首页动作</p>
+            <p className="section-kicker">Quick Actions</p>
             <h2>四个高频入口</h2>
           </div>
-          <p className="section-copy">不解释太多，点一下就开始工作。</p>
+          <p className="section-copy">不用解释太多，点一下就开始工作。</p>
         </div>
 
         <div className="home-actions">
@@ -92,7 +92,7 @@ export function HomePage({
       <section className="surface">
         <div className="section-head">
           <div>
-            <p className="section-kicker">机器概览</p>
+            <p className="section-kicker">Snapshot</p>
             <h2>一眼看懂</h2>
           </div>
         </div>
@@ -111,7 +111,7 @@ export function HomePage({
       <section className="surface">
         <div className="section-head">
           <div>
-            <p className="section-kicker">最近操作</p>
+            <p className="section-kicker">Last Result</p>
             <h2>结果摘要</h2>
           </div>
         </div>
@@ -127,7 +127,7 @@ export function HomePage({
             <p>{lastResult.summary}</p>
           </article>
         ) : (
-          <div className="empty-state">执行任意动作后，这里会保留最近一次摘要。</div>
+          <div className="empty-state">执行任意动作后，这里会保留最近一次结果。</div>
         )}
       </section>
     </div>

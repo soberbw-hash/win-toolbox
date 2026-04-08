@@ -4,53 +4,53 @@ export function getAiAssessment(snapshot: SystemSnapshot | null): AiAssessment {
   const vramMb = snapshot?.gpuMemoryMb ?? 0;
   const ramMb = snapshot?.memoryTotalMb ?? 0;
 
-  if (vramMb >= 10000 && ramMb >= 32768) {
+  if (vramMb >= 10_000 && ramMb >= 32_768) {
     return {
-      tier: "本地 AI 强机位",
-      headline: "7B 到 14B 量化模型都有不错的操作空间。",
-      models: ["Qwen 7B Q4_K_M", "Qwen 14B Q4（按需使用）"],
-      runtime: "便携版 Ollama + 空闲自动休眠",
+      tier: "本地 AI 强力档",
+      headline: "这台机器可以比较轻松地跑 7B 级量化模型，适合日常高频使用。",
+      models: ["Qwen 7B Q4_K_M", "Qwen 14B Q4（按需启动）"],
+      runtime: "推荐：Ollama + 按需拉起",
       notes: [
-        "这类机器完全值得做本地大模型部署，而且能真正形成生产力。",
-        "即使配置够强，也建议做显存占用回收和闲置进程清理。",
+        "优先把运行时装稳，再考虑更大的模型。",
+        "重任务时配合性能模式，结束后及时切回平衡模式。",
       ],
     };
   }
 
-  if (vramMb >= 7000 && ramMb >= 24576) {
+  if (vramMb >= 7_000 && ramMb >= 24_576) {
     return {
-      tier: "本地 AI 均衡机位",
-      headline: "7B 量化模型会是最舒服的甜点区。",
-      models: ["Qwen 7B Q4_K_M", "Qwen 4B 轻负载常驻"],
-      runtime: "Ollama 本地运行 + 显式启停控制",
+      tier: "本地 AI 均衡档",
+      headline: "7B 量化模型会是比较舒服的甜点区，速度和效果比较平衡。",
+      models: ["Qwen 7B Q4_K_M", "Qwen 4B 常驻方案"],
+      runtime: "推荐：Ollama + 轻量模型常驻",
       notes: [
-        "这类机器特别适合做“一键部署 + 用完即走”的本地 AI 方案。",
-        "默认用轻量模型，重模型不要默认常驻，这是体验上限的关键。",
+        "适合写作润色、摘要和灵感整理。",
+        "不建议默认常驻太重的模型，避免长期占用资源。",
       ],
     };
   }
 
-  if (vramMb >= 4000 && ramMb >= 16384) {
+  if (vramMb >= 4_000 && ramMb >= 16_384) {
     return {
-      tier: "本地 AI 轻量机位",
-      headline: "4B 和 1.8B 是最现实、也最稳妥的选择。",
-      models: ["Qwen 4B 量化版", "Qwen 1.8B 低延迟方案"],
-      runtime: "Ollama + 强制空闲回收",
+      tier: "本地 AI 轻量档",
+      headline: "先从 4B 或 1.8B 起步会更稳，体验也会更顺。",
+      models: ["Qwen 4B 量化版", "Qwen 1.8B 低延迟版"],
+      runtime: "推荐：Ollama + 空闲回收",
       notes: [
-        "机器依然可以跑本地 AI，但默认策略必须克制，不能一上来就贪大。",
-        "把体验做顺，比参数表好看更重要。",
+        "轻量模型更适合做全局悬浮问答。",
+        "先确保电脑不被模型拖慢，再考虑加大规模。",
       ],
     };
   }
 
   return {
-    tier: "本地 AI 入门机位",
+    tier: "本地 AI 入门档",
     headline: "建议从 0.5B 到 1.8B 开始，先把场景跑通。",
     models: ["Qwen 0.5B", "Qwen 1.8B"],
-    runtime: "便携运行时 + 激进资源释放",
+    runtime: "推荐：按需启动 + 及时释放资源",
     notes: [
-      "这类机器更需要的是硬件评估和轻量策略，而不是盲目自动下载大模型。",
-      "先保证电脑不卡，再谈本地 AI 的高级玩法。",
+      "适合偶尔问答、文案润色和灵感补全。",
+      "本地 AI 不是越大越好，顺手更重要。",
     ],
   };
 }

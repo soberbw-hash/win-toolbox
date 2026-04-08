@@ -1,4 +1,9 @@
-import type { AiAssessment, AiChatResponse, AiRuntimeStatus, ComponentManifest } from "../types";
+import type {
+  AiAssessment,
+  AiChatResponse,
+  AiRuntimeStatus,
+  ComponentManifest,
+} from "../types";
 
 type AiPageProps = {
   assessment: AiAssessment;
@@ -41,18 +46,18 @@ export function AiPage({
 
           <article className="soft-card tool-card">
             <h3>运行时状态</h3>
-            <p>{runtime?.suggestedEntry ?? "正在读取运行时状态。"}</p>
+            <p>{runtime?.suggestedEntry ?? "正在读取本地运行时状态"}</p>
             <small>
               {runtime?.ollamaInstalled ? "Ollama 已安装" : "Ollama 未安装"}
-              {runtime?.ollamaRunning ? " · 推理中" : ""}
+              {runtime?.ollamaRunning ? " · 正在运行" : ""}
             </small>
           </article>
 
           <article className="soft-card tool-card">
             <h3>一句话调用</h3>
-            <p>需要的时候再呼出，不让本地模型长期常驻。</p>
+            <p>需要的时候再呼出，不让本地模型长期常驻占资源。</p>
             <button className="secondary-button" type="button" onClick={onOpenPalette}>
-              打开 AI 面板
+              打开 AI 悬浮窗
             </button>
           </article>
         </div>
@@ -61,7 +66,7 @@ export function AiPage({
       <section className="surface">
         <div className="section-head">
           <div>
-            <p className="section-kicker">AI Component</p>
+            <p className="section-kicker">Runtime</p>
             <h2>本地运行时</h2>
           </div>
         </div>
@@ -90,7 +95,7 @@ export function AiPage({
             <h3>最近回答</h3>
             <p>{response?.model ?? "还没有调用记录"}</p>
             <small>
-              {response?.answer?.slice(0, 120) ?? "打开 AI 面板后，就可以直接发起本地问答。"}
+              {response?.answer?.slice(0, 120) ?? "打开 AI 悬浮窗后，就可以直接发起本地问答。"}
             </small>
           </article>
         </div>

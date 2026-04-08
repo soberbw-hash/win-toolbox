@@ -31,7 +31,7 @@ export function AiPalette({
         <div className="palette__header">
           <div>
             <p className="eyebrow">AI 灵感悬浮窗</p>
-            <h3>想法来了，直接问</h3>
+            <h3>一句话直接问</h3>
           </div>
           <button className="ghost-button" type="button" onClick={onClose}>
             关闭
@@ -40,14 +40,14 @@ export function AiPalette({
 
         <p className="palette__meta">
           {runtime?.paletteReady
-            ? `当前模型：${runtime.availableModels[0]}`
-            : "未检测到可直接使用的本地模型，请先安装 Ollama 并拉取 Qwen。"}
+            ? `当前默认模型：${runtime.availableModels[0]}`
+            : "还没有可直接调用的本地模型，请先安装 Ollama 并拉取模型。"}
         </p>
 
         <textarea
           className="palette__input"
           value={prompt}
-          placeholder="比如：帮我把这段文案润色成更像短视频口播的语气"
+          placeholder="比如：帮我把这段文案改得更像短视频开场钩子。"
           onChange={(event) => onPromptChange(event.target.value)}
         />
 
@@ -64,10 +64,10 @@ export function AiPalette({
         </div>
 
         {response ? (
-          <article className="card palette__response">
-            <div className="action-card__header">
-              <h3>{response.model}</h3>
-              <span>本地回答</span>
+          <article className="soft-card palette__response">
+            <div className="history-item__top">
+              <strong>{response.model}</strong>
+              <span className="pill pill--muted">本地回答</span>
             </div>
             <pre className="console-output">{response.answer}</pre>
           </article>

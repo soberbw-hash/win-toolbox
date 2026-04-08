@@ -15,7 +15,7 @@ export function SystemPage({ tools, runningActionId, onRunAction }: SystemPagePr
             <p className="section-kicker">System</p>
             <h2>维护与修复</h2>
           </div>
-          <p className="section-copy">把系统维护动作整理成更清楚、更克制的卡片。</p>
+          <p className="section-copy">修复、备份和系统入口统一收在这里。</p>
         </div>
 
         <div className="tool-grid">

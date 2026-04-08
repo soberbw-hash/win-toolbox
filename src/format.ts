@@ -21,7 +21,9 @@ export function formatBytes(bytes: number | null | undefined) {
     index += 1;
   }
 
-  return index === 0 ? `${Math.round(value)} ${units[index]}` : `${value.toFixed(1)} ${units[index]}`;
+  return index === 0
+    ? `${Math.round(value)} ${units[index]}`
+    : `${value.toFixed(1)} ${units[index]}`;
 }
 
 export function formatRelativeTime(iso: string | null | undefined) {
@@ -49,5 +51,7 @@ export function formatDuration(durationMs: number | null | undefined) {
     return "瞬时完成";
   }
 
-  return durationMs < 1000 ? `${durationMs} ms` : `${(durationMs / 1000).toFixed(1)} s`;
+  return durationMs < 1000
+    ? `${durationMs} ms`
+    : `${(durationMs / 1000).toFixed(1)} s`;
 }

@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getAiAssessment } from "./ai";
 import { AiPalette } from "./AiPalette";
 import { BossModeOverlay } from "./BossModeOverlay";
-import { homeQuickActions, sectionCatalog, sections, systemTools } from "./content";
+import { bossModeShortcut, homeQuickActions, sectionCatalog, sections, systemTools } from "./content";
 import { getBossModeViewState } from "./fakeUpdate";
 import { InfoDrawer } from "./InfoDrawer";
 import { useAppSettings } from "./hooks/useAppSettings";
@@ -20,6 +20,7 @@ import type {
   AiRuntimeStatus,
   BossModeViewState,
   ComponentManifest,
+  ComponentOperation,
   SectionId,
   StorageHotspot,
   SystemSnapshot,
@@ -34,7 +35,8 @@ type ToastState = {
 
 function App() {
   const { settings, updateSettings } = useAppSettings();
-  const layoutTier = useResponsiveLayout();
+  const { layoutTier } = useResponsiveLayout();
+  const toastTimerRef = useRef<number | null>(null);
 
   const [activeSection, setActiveSection] = useState<SectionId>("home");
   const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null);
@@ -58,10 +60,18 @@ function App() {
 
   const activeSectionInfo = sectionCatalog[activeSection];
   const aiAssessment = getAiAssessment(snapshot);
+  const capturePlus = components.find((item) => item.id === "capture-plus");
 
   function pushToast(message: string, tone: "info" | "error" = "info") {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+
     setToast({ message, tone });
-    window.setTimeout(() => setToast(null), 2600);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 2600);
   }
 
   function recordResult(result: ToolActionResult) {
@@ -105,20 +115,69 @@ function App() {
       recordResult(result);
       pushToast(result.summary, result.success ? "info" : "error");
       await Promise.all([loadSnapshot(), loadHotspots(), loadAiRuntime(), loadComponents()]);
+      return result;
     } catch (error) {
       const message = String(error);
-      pushToast(message, "error");
-      recordResult({
+      const result: ToolActionResult = {
         actionId,
         title: "操作失败",
         success: false,
-        summary: "动作未能完成，请查看错误信息。",
+        summary: "动作没有完成，请查看错误信息。",
         details: message,
         durationMs: 0,
         warnings: [],
-      });
+      };
+      pushToast(message, "error");
+      recordResult(result);
+      return result;
     } finally {
       setRunningActionId(null);
+    }
+  }
+
+  async function manageComponent(
+    componentId: string,
+    operation: ComponentOperation,
+  ): Promise<ToolActionResult | null> {
+    try {
+      setBusyComponentId(componentId);
+      const result = await invoke<ToolActionResult>("manage_component", {
+        componentId,
+        operation,
+      });
+      recordResult(result);
+      pushToast(result.summary, result.success ? "info" : "error");
+      await Promise.all([loadComponents(), loadAiRuntime()]);
+      return result;
+    } catch (error) {
+      pushToast(String(error), "error");
+      return null;
+    } finally {
+      setBusyComponentId(null);
+    }
+  }
+
+  async function launchComponent(componentId: string): Promise<ToolActionResult | null> {
+    try {
+      setBusyComponentId(componentId);
+      const result = await invoke<ToolActionResult>("launch_component", { componentId });
+      recordResult(result);
+      pushToast(result.summary, result.success ? "info" : "error");
+      return result;
+    } catch (error) {
+      pushToast(String(error), "error");
+      return null;
+    } finally {
+      setBusyComponentId(null);
+    }
+  }
+
+  async function openTarget(target: string) {
+    try {
+      const result = await invoke<ToolActionResult>("open_target", { target });
+      pushToast(result.summary);
+    } catch (error) {
+      pushToast(String(error), "error");
     }
   }
 
@@ -132,46 +191,24 @@ function App() {
     await runAction(actionId as ActionId);
   }
 
-  async function manageComponent(
-    componentId: string,
-    operation: "install" | "repair" | "uninstall",
-  ) {
-    try {
-      setBusyComponentId(componentId);
-      const result = await invoke<ToolActionResult>("manage_component", {
-        componentId,
-        operation,
-      });
-      recordResult(result);
-      pushToast(result.summary, result.success ? "info" : "error");
-      await Promise.all([loadComponents(), loadAiRuntime()]);
-    } catch (error) {
-      pushToast(String(error), "error");
-    } finally {
-      setBusyComponentId(null);
-    }
-  }
+  async function toggleCaptureHelper(nextEnabled: boolean) {
+    if (nextEnabled) {
+      if (!capturePlus?.installed) {
+        const installResult = await manageComponent("capture-plus", "install");
+        if (!installResult?.success) {
+          return;
+        }
+      }
 
-  async function launchComponent(componentId: string) {
-    try {
-      setBusyComponentId(componentId);
-      const result = await invoke<ToolActionResult>("launch_component", { componentId });
-      recordResult(result);
-      pushToast(result.summary, result.success ? "info" : "error");
-    } catch (error) {
-      pushToast(String(error), "error");
-    } finally {
-      setBusyComponentId(null);
+      updateSettings({ captureHelperEnabled: true });
+      await launchComponent("capture-plus");
+      pushToast("截图增强已开启。按 F1 截图，按 F3 贴图。");
+      return;
     }
-  }
 
-  async function openTarget(target: string) {
-    try {
-      const result = await invoke<ToolActionResult>("open_target", { target });
-      pushToast(result.summary);
-    } catch (error) {
-      pushToast(String(error), "error");
-    }
+    await manageComponent("capture-plus", "disable");
+    updateSettings({ captureHelperEnabled: false });
+    pushToast("截图增强已关闭，已恢复系统默认截图。");
   }
 
   async function askLocalAi() {
@@ -210,6 +247,8 @@ function App() {
       appWindow.setCursorVisible(false),
       appWindow.setContentProtected(true),
     ]);
+
+    pushToast(`已进入老板键，按 ${bossModeShortcut} 或 Esc 退出。`);
   }
 
   async function exitBossMode() {
@@ -228,13 +267,52 @@ function App() {
 
   useEffect(() => {
     void refreshCore();
-    const timer = window.setInterval(() => void loadSnapshot(), 30_000);
-    return () => window.clearInterval(timer);
+
+    return () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!document.hidden && !bossMode) {
+        void loadSnapshot();
+      }
+    }, 60_000);
+
+    return () => window.clearInterval(timer);
+  }, [bossMode]);
+
+  useEffect(() => {
+    if (settings.captureHelperEnabled && !capturePlus?.installed) {
+      updateSettings({ captureHelperEnabled: false });
+    }
+  }, [capturePlus?.installed, settings.captureHelperEnabled, updateSettings]);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.altKey && event.key.toLowerCase() === "b") {
+        event.preventDefault();
+        if (bossMode) {
+          void exitBossMode();
+        } else {
+          void enterBossMode();
+        }
+        return;
+      }
+
       if (bossMode) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          void exitBossMode();
+          return;
+        }
+
+        if (["Meta", "ContextMenu"].includes(event.key)) {
+          event.preventDefault();
+        }
         return;
       }
 
@@ -257,23 +335,7 @@ function App() {
       setBossState(getBossModeViewState(Date.now() - bossStartedAt));
     }, 250);
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.altKey && event.shiftKey && event.key.toLowerCase() === "u") {
-        event.preventDefault();
-        void exitBossMode();
-        return;
-      }
-
-      if (["Escape", "Meta", "ContextMenu"].includes(event.key)) {
-        event.preventDefault();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("keydown", onKeyDown);
-    };
+    return () => window.clearInterval(timer);
   }, [bossMode, bossStartedAt]);
 
   function renderPage() {
@@ -307,9 +369,9 @@ function App() {
             components={components}
             hotspots={hotspots}
             busyComponentId={busyComponentId}
-            runningActionId={runningActionId}
-            onRunCapture={() => {
-              void runAction("launch_capture");
+            captureHelperEnabled={settings.captureHelperEnabled}
+            onToggleCaptureHelper={(nextEnabled) => {
+              void toggleCaptureHelper(nextEnabled);
             }}
             onManageComponent={(componentId, operation) => {
               void manageComponent(componentId, operation);
@@ -368,15 +430,16 @@ function App() {
 
         <aside className="sidebar">
           <div className="sidebar__brand">
-            <div className="sidebar__logo">WT</div>
-            <div>
-              <p className="sidebar__eyebrow">Win Toolbox</p>
-              <h1>极简 Windows 效率控制台</h1>
+            <img src="/app-mark.svg" alt="" className="sidebar__logo-image" />
+            <div className="sidebar__brand-copy">
+              <p className="sidebar__eyebrow">WIN TOOLBOX</p>
+              <h1>Win Toolbox</h1>
+              <p className="sidebar__product-label">效率控制台</p>
             </div>
           </div>
 
           <p className="sidebar__summary">
-            首页只留高频动作，复杂能力收进二级页，装好就能直接用。
+            高频动作留在首页，复杂能力收进二级页，打开就能直接用。
           </p>
 
           <nav className="sidebar__nav">
@@ -403,6 +466,14 @@ function App() {
               查看状态与记录
             </button>
           </section>
+
+          <section className="sidebar__panel sidebar__panel--support">
+            <p className="section-kicker">支持一下</p>
+            <p>赞助入口已经放回设置页里了。</p>
+            <button className="ghost-button" type="button" onClick={() => setActiveSection("settings")}>
+              打开赞助码
+            </button>
+          </section>
         </aside>
 
         <main className="main-panel">
@@ -414,7 +485,9 @@ function App() {
 
             <div className="main-toolbar__actions">
               <span className="toolbar-pill">
-                {snapshot ? `${snapshot.cpuName} · ${snapshot.memoryUsagePercent}% 内存占用` : "正在读取快照"}
+                {snapshot
+                  ? `${snapshot.cpuName} · ${snapshot.memoryUsagePercent}% 内存占用`
+                  : "正在读取快照"}
               </span>
               <button className="ghost-button" type="button" onClick={() => setDrawerOpen(true)}>
                 机器与记录
@@ -456,7 +529,13 @@ function App() {
         }}
       />
 
-      {bossMode ? <BossModeOverlay state={bossState} /> : null}
+      {bossMode ? (
+        <BossModeOverlay
+          state={bossState}
+          exitHint={`按 ${bossModeShortcut} 或 Esc 退出演示模式`}
+        />
+      ) : null}
+
       {toast ? <div className={`toast toast--${toast.tone}`}>{toast.message}</div> : null}
     </>
   );

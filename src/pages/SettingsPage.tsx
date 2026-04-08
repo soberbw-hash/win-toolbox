@@ -1,3 +1,4 @@
+import { bossModeShortcut } from "../content";
 import type { AppSettings } from "../types";
 
 type SettingsPageProps = {
@@ -19,7 +20,7 @@ export function SettingsPage({
             <p className="section-kicker">Settings</p>
             <h2>外观与偏好</h2>
           </div>
-          <p className="section-copy">优先使用鸿蒙字体链，并为不同分辨率保留可调节密度。</p>
+          <p className="section-copy">字体、密度、截图保存目录和开机启动都在这里。</p>
         </div>
 
         <div className="settings-grid">
@@ -98,24 +99,27 @@ export function SettingsPage({
       <section className="surface">
         <div className="section-head">
           <div>
-            <p className="section-kicker">Advanced</p>
-            <h2>隐藏入口</h2>
+            <p className="section-kicker">Boss Mode & Support</p>
+            <h2>老板键与赞助</h2>
           </div>
         </div>
 
-        <div className="split-grid">
+        <div className="split-grid split-grid--support">
           <article className="soft-card feature-card">
             <h3>老板键</h3>
-            <p>保留为隐藏功能，不再作为主卖点放在首页。</p>
+            <p>快捷键是 {bossModeShortcut}。进入后按同样的快捷键，或按 Esc 就能退出。</p>
+            <small>进入演示模式后，底部也会一直显示退出提示，不会再出现进去了退不出来。</small>
             <button className="ghost-button" type="button" onClick={onEnterBossMode}>
-              进入演示遮罩
+              立即进入
             </button>
           </article>
 
-          <article className="soft-card feature-card">
-            <h3>关于 V3</h3>
-            <p>去创作者化、去插件化、去展示化，回到更克制的桌面产品形态。</p>
-            <small>目标是更像正式产品，而不是一个功能堆叠的演示页。</small>
+          <article className="soft-card support-card">
+            <div>
+              <h3>赞助支持</h3>
+              <p>如果这个工具对你有帮助，欢迎扫码支持继续打磨。</p>
+            </div>
+            <img src="/donate-qr.png" alt="赞助收款码" className="support-card__qr" />
           </article>
         </div>
       </section>

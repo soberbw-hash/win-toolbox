@@ -12,6 +12,8 @@ export type ActionId =
   | "enable_beast_mode"
   | "restore_balanced_mode";
 
+export type ComponentOperation = "install" | "repair" | "uninstall" | "disable";
+
 export type SystemSnapshot = {
   hostName: string;
   osName: string;
@@ -131,4 +133,5 @@ export type AppSettings = {
   startOnBoot: boolean;
   saveToClipboardFirst: boolean;
   screenshotFolder: string;
+  captureHelperEnabled: boolean;
 };

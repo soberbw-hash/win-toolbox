@@ -1,8 +1,8 @@
 {
   "name": "win-toolbox",
   "private": true,
-  "version": "3.0.0",
-  "description": "给中文用户做的极简 Windows 效率控制台：截图、清理、修复、空间管理和本地 AI。",
+  "version": "3.2.0",
+  "description": "给中文用户做的极简 Windows 效率控制台：截图、清理、修复、空间管理和本地 AI，一装即用。",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,17 +11,17 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2"
+    "@tauri-apps/plugin-opener": "^2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4",
-    "@tauri-apps/cli": "^2"
+    "vite": "^7.0.4"
   }
 }

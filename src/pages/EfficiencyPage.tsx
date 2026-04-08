@@ -1,15 +1,19 @@
 import { ComponentCenter } from "../ComponentCenter";
-import { quickPathTargets } from "../content";
-import { formatBytes } from "../format";
-import type { ComponentManifest, StorageHotspot } from "../types";
+import { bossModeShortcut, quickPathTargets } from "../content";
+import { StorageVisualizer } from "../StorageVisualizer";
+import type {
+  ComponentManifest,
+  ComponentOperation,
+  StorageHotspot,
+} from "../types";
 
 type EfficiencyPageProps = {
   components: ComponentManifest[];
   hotspots: StorageHotspot[];
   busyComponentId: string | null;
-  runningActionId: string | null;
-  onRunCapture: () => void;
-  onManageComponent: (componentId: string, operation: "install" | "repair" | "uninstall") => void;
+  captureHelperEnabled: boolean;
+  onToggleCaptureHelper: (nextEnabled: boolean) => void;
+  onManageComponent: (componentId: string, operation: ComponentOperation) => void;
   onLaunchComponent: (componentId: string) => void;
   onRefreshHotspots: () => void;
   onOpenTarget: (target: string) => void;
@@ -25,66 +29,78 @@ export function EfficiencyPage({
   components,
   hotspots,
   busyComponentId,
-  runningActionId,
-  onRunCapture,
+  captureHelperEnabled,
+  onToggleCaptureHelper,
   onManageComponent,
   onLaunchComponent,
   onRefreshHotspots,
   onOpenTarget,
 }: EfficiencyPageProps) {
   const capturePlus = components.find((item) => item.id === "capture-plus");
+  const captureBusy = busyComponentId === "capture-plus";
+
+  const captureStatus = capturePlus?.installed
+    ? captureHelperEnabled
+      ? "已开启。按 F1 截图，按 F3 贴图。"
+      : "Snipaste 已安装，点击开启后就会直接接管截图。"
+    : "未开启。点击一下会自动安装 Snipaste 并启用。";
 
   return (
     <div className="page-stack">
       <section className="surface">
         <div className="section-head">
           <div>
-            <p className="section-kicker">Capture Center</p>
-            <h2>截图中心</h2>
+            <p className="section-kicker">Capture</p>
+            <h2>截图增强</h2>
           </div>
-          <p className="section-copy">基础截图内置，增强能力通过组件一键补齐。</p>
+          <p className="section-copy">这里只保留一个开关。开就装好，关就回到系统默认。</p>
         </div>
 
-        <div className="split-grid">
-          <article className="soft-card feature-card">
-            <h3>立即截图</h3>
-            <p>区域截图开箱即用，不需要额外配置。</p>
-            <button
-              className="primary-button"
-              type="button"
-              disabled={runningActionId === "launch_capture"}
-              onClick={onRunCapture}
-            >
-              {runningActionId === "launch_capture" ? "处理中..." : "截图"}
-            </button>
+        <div className="split-grid split-grid--capture">
+          <article className="soft-card feature-card capture-card">
+            <div className="history-item__top">
+              <div>
+                <h3>Snipaste 截图增强</h3>
+                <small>{capturePlus?.statusLabel ?? "未检测到"}</small>
+              </div>
+              <span
+                className={`pill ${captureHelperEnabled ? "pill--success" : "pill--muted"}`}
+              >
+                {captureHelperEnabled ? "已开启" : "未开启"}
+              </span>
+            </div>
+
+            <p>{captureStatus}</p>
+            <small>不开启时，仍然可以直接使用 `Win + Shift + S`。</small>
+
+            <div className="button-row">
+              <button
+                className={captureHelperEnabled ? "secondary-button" : "primary-button"}
+                type="button"
+                disabled={captureBusy}
+                onClick={() => onToggleCaptureHelper(!captureHelperEnabled)}
+              >
+                {captureBusy ? "处理中..." : captureHelperEnabled ? "关闭" : "开启"}
+              </button>
+            </div>
           </article>
 
-          <article className="soft-card feature-card">
-            <h3>增强截图</h3>
-            <p>
-              {capturePlus?.installed
-                ? "增强截图已经可用，支持更完整的截图工作流。"
-                : "需要更强能力时，一键安装截图增强组件即可。"}
-            </p>
-            <button
-              className={capturePlus?.installed ? "secondary-button" : "primary-button"}
-              type="button"
-              disabled={busyComponentId === "capture-plus"}
-              onClick={() => {
-                if (capturePlus?.installed) {
-                  onLaunchComponent("capture-plus");
-                  return;
-                }
-
-                onManageComponent("capture-plus", "install");
-              }}
-            >
-              {busyComponentId === "capture-plus"
-                ? "处理中..."
-                : capturePlus?.installed
-                  ? "启动增强截图"
-                  : "安装增强截图"}
-            </button>
+          <article className="soft-card feature-card capture-shortcut-card">
+            <h3>快捷键提示</h3>
+            <div className="shortcut-list">
+              <div className="shortcut-row">
+                <strong>F1</strong>
+                <span>截图</span>
+              </div>
+              <div className="shortcut-row">
+                <strong>F3</strong>
+                <span>贴图</span>
+              </div>
+              <div className="shortcut-row">
+                <strong>{bossModeShortcut}</strong>
+                <span>进入 / 退出老板键</span>
+              </div>
+            </div>
           </article>
         </div>
       </section>
@@ -96,25 +112,15 @@ export function EfficiencyPage({
             <h2>空间管理</h2>
           </div>
           <button className="ghost-button" type="button" onClick={onRefreshHotspots}>
-            重新扫描
+            刷新扫描
           </button>
         </div>
 
-        <div className="hotspot-grid">
-          {hotspots.slice(0, 8).map((item) => (
-            <article key={item.id} className="soft-card hotspot-item">
-              <div className="history-item__top">
-                <strong>{item.label}</strong>
-                <span className="pill pill--muted">{item.source}</span>
-              </div>
-              <p>{formatBytes(item.sizeBytes)}</p>
-              <small>{item.itemCount} 项</small>
-              <button className="ghost-button" type="button" onClick={() => onOpenTarget(item.path)}>
-                打开位置
-              </button>
-            </article>
-          ))}
-        </div>
+        <p className="section-copy section-copy--full">
+          用图形视图直接看清空间都去哪了。点图块或列表就能打开对应位置。
+        </p>
+
+        <StorageVisualizer hotspots={hotspots} onOpenTarget={onOpenTarget} />
       </section>
 
       <section className="surface">
@@ -143,6 +149,7 @@ export function EfficiencyPage({
       <ComponentCenter
         items={components}
         busyId={busyComponentId}
+        hiddenIds={["capture-plus"]}
         onManage={onManageComponent}
         onLaunch={onLaunchComponent}
       />

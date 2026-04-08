@@ -26,7 +26,7 @@ const phases: Phase[] = [
     percentFrom: 32,
     percentTo: 72,
     stageTitle: "正在安装系统功能",
-    stageHint: "这一阶段通常会慢一些，这是正常现象",
+    stageHint: "这一阶段通常会慢一点，这是正常现象",
     phaseLabel: "阶段 1 / 写入中",
     instruction: "请勿关闭电脑，也不要断开电源。",
   },
@@ -112,7 +112,7 @@ export function getBossModeViewState(elapsedMs: number): BossModeViewState {
 
   return {
     stageTitle: "正在等待恢复桌面",
-    stageHint: "假更新模式仍在保持中",
+    stageHint: "演示模式仍在保持中",
     percent: 100,
     phaseLabel: "阶段 2 / 已完成",
     phaseIndex: phases.length - 1,

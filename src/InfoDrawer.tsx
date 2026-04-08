@@ -25,8 +25,8 @@ export function InfoDrawer({
       <aside className="drawer-panel" onClick={(event) => event.stopPropagation()}>
         <div className="drawer-panel__header">
           <div>
-            <p className="section-kicker">状态抽屉</p>
-            <h2>当前机器与最近操作</h2>
+            <p className="section-kicker">Machine & History</p>
+            <h2>机器与记录</h2>
           </div>
           <button className="ghost-button" type="button" onClick={onClose}>
             关闭
@@ -34,7 +34,7 @@ export function InfoDrawer({
         </div>
 
         <section className="soft-card drawer-section">
-          <h3>机器概览</h3>
+          <h3>当前机器</h3>
           <dl className="drawer-meta">
             <div>
               <dt>系统</dt>

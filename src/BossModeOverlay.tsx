@@ -2,6 +2,7 @@ import type { BossModeViewState } from "./types";
 
 type BossModeOverlayProps = {
   state: BossModeViewState;
+  exitHint: string;
 };
 
 function LoadingDots() {
@@ -14,7 +15,7 @@ function LoadingDots() {
   );
 }
 
-export function BossModeOverlay({ state }: BossModeOverlayProps) {
+export function BossModeOverlay({ state, exitHint }: BossModeOverlayProps) {
   if (state.isRebooting) {
     return <div className="boss-mode boss-mode--reboot" />;
   }
@@ -31,6 +32,7 @@ export function BossModeOverlay({ state }: BossModeOverlayProps) {
       <div className="boss-mode__footer">
         <p>{state.instruction}</p>
         <small>{state.phaseLabel}</small>
+        <div className="boss-mode__exit">{exitHint}</div>
       </div>
     </div>
   );

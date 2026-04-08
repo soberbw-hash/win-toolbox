@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { AppSettings } from "../types";
 
-const STORAGE_KEY = "win-toolbox:settings:v3";
+const STORAGE_KEY = "win-toolbox:settings:v3_2";
 
 const defaultSettings: AppSettings = {
   density: "auto",
@@ -10,6 +10,7 @@ const defaultSettings: AppSettings = {
   startOnBoot: false,
   saveToClipboardFirst: true,
   screenshotFolder: "图片/Win Toolbox",
+  captureHelperEnabled: false,
 };
 
 export function useAppSettings() {
@@ -30,9 +31,9 @@ export function useAppSettings() {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);
 
-  return {
-    settings,
-    updateSettings: (patch: Partial<AppSettings>) =>
-      setSettings((current) => ({ ...current, ...patch })),
-  };
+  const updateSettings = useCallback((patch: Partial<AppSettings>) => {
+    setSettings((current) => ({ ...current, ...patch }));
+  }, []);
+
+  return { settings, updateSettings };
 }
