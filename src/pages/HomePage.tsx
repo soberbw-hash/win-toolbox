@@ -54,9 +54,9 @@ export function HomePage({
     <div className="page-stack">
       <section className="hero-surface">
         <div className="hero-surface__copy">
-          <p className="section-kicker">WIN TOOLBOX V3.3</p>
+          <p className="section-kicker">WIN TOOLBOX V3.4</p>
           <h1>装好就能用</h1>
-          <p>截图、清理、修复、空间管理，四个高频入口都留在第一屏。</p>
+          <p>截图、清理、修复、空间管理，四个高频入口都留在第一屏，增强工具统一收进组件中心。</p>
         </div>
 
         <div className="hero-surface__status soft-card">

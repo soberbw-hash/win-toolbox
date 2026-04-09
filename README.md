@@ -2,14 +2,14 @@
   <img src="./public/banner.svg" alt="Win Toolbox Banner" width="100%" />
 </p>
 
-<h1 align="center">Win Toolbox V3.3</h1>
+<h1 align="center">Win Toolbox V3.4</h1>
 
 <p align="center">
   给中文用户做的极简 Windows 效率控制台
 </p>
 
 <p align="center">
-  截图、清理、修复、空间管理、Qclaw 和图片查看器，一装即用，不再来回切窗口。
+  截图、清理、修复、空间管理、Qclaw、图片查看器和常用效率组件，一装即用，不再来回切窗口。
 </p>
 
 ---
@@ -23,13 +23,13 @@
 - 本地 AI：自动评估机器档位，给出更适合当前硬件的本地模型建议。
 - 组件中心：Qclaw、图片查看器、Clash Verge Rev、软件卸载增强都支持一键安装。
 
-## V3.3 这一版重点
+## V3.4 这一版重点
 
-- 组件中心已接入 `Qclaw 桌面助手`。
-- 组件中心新增 `图片查看器`，默认接入 Honeyview。
-- 组件卡片统一支持安装、打开、修复、卸载和状态提示。
-- 设置页新增第三方组件说明、来源、许可证、日志目录和组件数据目录入口。
-- 软件首次打开会显示启动进度，不再像卡住几秒没有反馈。
+- 组件中心独立成一级目录，截图增强也收进组件中心统一管理。
+- 新增 `File Converter` 和 `Koodo Reader` 组件，支持一键安装、打开、修复和卸载。
+- 常用组件卡片改为官方图标优先，并统一成圆角方形样式。
+- 赞助入口恢复为居中弹窗，背景模糊，点开就能直接看到收款码。
+- 软件首次打开会显示启动进度，老板键改为真正全屏，不再露出窗口边框。
 
 ## 组件中心
 
@@ -38,6 +38,8 @@
 - Qclaw 桌面助手
 - 图片查看器（Honeyview）
 - Snipaste 截图增强
+- File Converter
+- Koodo Reader
 - Clash Verge Rev
 - 软件卸载增强（BCUninstaller）
 - Everything 搜索增强

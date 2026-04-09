@@ -1,4 +1,4 @@
-export type SectionId = "home" | "system" | "efficiency" | "ai" | "settings";
+export type SectionId = "home" | "system" | "components" | "efficiency" | "ai" | "settings";
 
 export type ActionId =
   | "launch_capture"

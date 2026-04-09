@@ -551,6 +551,62 @@ fn honeyview_detect_paths() -> Vec<PathBuf> {
     paths
 }
 
+fn file_converter_detect_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    if let Some(local) = local_app_data_dir() {
+        paths.extend(search_paths_for_executable(
+            &local.join("Microsoft").join("WinGet").join("Packages"),
+            "FileConverter.exe",
+            4,
+        ));
+    }
+
+    if let Some(program_files) = program_files_dir() {
+        paths.push(program_files.join("File Converter").join("FileConverter.exe"));
+        paths.extend(search_paths_for_executable(
+            &program_files,
+            "FileConverter.exe",
+            3,
+        ));
+    }
+
+    paths
+}
+
+fn koodo_reader_detect_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    if let Some(local) = local_app_data_dir() {
+        paths.push(
+            local.join("Programs")
+                .join("Koodo Reader")
+                .join("Koodo Reader.exe"),
+        );
+        paths.push(
+            local.join("Programs")
+                .join("koodo-reader")
+                .join("Koodo Reader.exe"),
+        );
+        paths.extend(search_paths_for_executable(
+            &local.join("Microsoft").join("WinGet").join("Packages"),
+            "Koodo Reader.exe",
+            4,
+        ));
+    }
+
+    if let Some(program_files) = program_files_dir() {
+        paths.push(program_files.join("Koodo Reader").join("Koodo Reader.exe"));
+        paths.extend(search_paths_for_executable(
+            &program_files,
+            "Koodo Reader.exe",
+            3,
+        ));
+    }
+
+    paths
+}
+
 fn clash_verge_detect_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
@@ -783,7 +839,7 @@ fn component_definitions_internal() -> Vec<ComponentDefinition> {
             "Qclaw 桌面助手",
             "一键部署 Qclaw，自动准备运行环境并完成基础配置。",
             "AI 组件",
-            Some("0.2.3"),
+            Some("0.2.4"),
             Some("winget · 腾讯官方安装包"),
             Some("https://qclaw.qq.com/"),
             Some("专有软件"),
@@ -819,6 +875,48 @@ fn component_definitions_internal() -> Vec<ComponentDefinition> {
             false,
             true,
             false,
+        ),
+        build_component_definition(
+            "file-converter",
+            "File Converter",
+            "一键安装 File Converter，右键就能直接转换和压缩文件。",
+            "效率增强",
+            Some("2.2"),
+            Some("winget · File Converter"),
+            Some("https://file-converter.io/"),
+            Some("GPL-3.0"),
+            Some("https://github.com/Tichau/FileConverter/blob/HEAD/LICENSE.md"),
+            None,
+            Some("AdrienAllard.FileConverter"),
+            Some("https://file-converter.io/"),
+            file_converter_detect_paths(),
+            vec!["--settings".to_string()],
+            Some("FileConverter"),
+            false,
+            true,
+            true,
+            true,
+        ),
+        build_component_definition(
+            "koodo-reader",
+            "Koodo Reader",
+            "一键安装 Koodo Reader，快速导入和阅读电子书。",
+            "阅读增强",
+            Some("2.3.1"),
+            Some("winget · Koodo Reader"),
+            Some("https://www.koodoreader.com/zh"),
+            Some("AGPL-3.0"),
+            Some("https://github.com/koodo-reader/koodo-reader/blob/HEAD/LICENSE"),
+            None,
+            Some("AppByTroye.KoodoReader"),
+            Some("https://www.koodoreader.com/zh"),
+            koodo_reader_detect_paths(),
+            Vec::new(),
+            Some("KoodoReader"),
+            false,
+            true,
+            true,
+            true,
         ),
         build_component_definition(
             "capture-plus",
@@ -1242,6 +1340,10 @@ fn run_component_install(component_id: &str, repair: bool) -> Result<ToolActionR
             "Qclaw 已安装完成，现在可以直接打开使用。".to_string()
         } else if refreshed_component.id == "image-viewer" {
             "图片查看器已安装完成，现在可以快速打开图片。".to_string()
+        } else if refreshed_component.id == "file-converter" {
+            "File Converter 已安装完成，现在右键就能直接转换文件。".to_string()
+        } else if refreshed_component.id == "koodo-reader" {
+            "Koodo Reader 已安装完成，现在可以直接导入和阅读电子书。".to_string()
         } else if repair {
             format!("{} 已修复完成。", refreshed_component.name)
         } else {
@@ -1366,6 +1468,10 @@ fn launch_component_internal(component_id: &str) -> Result<ToolActionResult, Str
             "Qclaw 已启动。扫码绑定后就能直接开始使用。".to_string()
         } else if component.id == "image-viewer" {
             "图片查看器已启动。现在可以直接拖图进去查看。".to_string()
+        } else if component.id == "file-converter" {
+            "File Converter 设置已打开，可以直接调整右键转换预设。".to_string()
+        } else if component.id == "koodo-reader" {
+            "Koodo Reader 已启动，现在可以直接导入电子书。".to_string()
         } else {
             format!("已启动 {}。", component.name)
         };

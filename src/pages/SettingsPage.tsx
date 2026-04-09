@@ -17,6 +17,7 @@ type SettingsPageProps = {
   onManageComponent: (componentId: string, operation: ComponentOperation) => void;
   onLaunchComponent: (componentId: string) => void;
   onOpenTarget: (target: string) => void;
+  onOpenSupportModal: () => void;
 };
 
 export function SettingsPage({
@@ -29,6 +30,7 @@ export function SettingsPage({
   onManageComponent,
   onLaunchComponent,
   onOpenTarget,
+  onOpenSupportModal,
 }: SettingsPageProps) {
   const installedComponents = components.filter((item) => item.installed && item.kind !== "built-in");
 
@@ -126,7 +128,7 @@ export function SettingsPage({
         </div>
 
         {installedComponents.length === 0 ? (
-          <div className="empty-state">还没有检测到已安装组件，去效率页点一下就能开始安装。</div>
+          <div className="empty-state">还没有检测到已安装组件，去组件中心点一下就能开始安装。</div>
         ) : (
           <div className="settings-installed-grid">
             {installedComponents.map((item) => (
@@ -286,6 +288,9 @@ export function SettingsPage({
             <div>
               <h3>赞助支持</h3>
               <p>如果这个工具对你有帮助，欢迎扫码支持继续打磨。</p>
+              <button className="ghost-button" type="button" onClick={onOpenSupportModal}>
+                弹出赞助码
+              </button>
             </div>
             <img src="/donate-qr.png" alt="赞助收款码" className="support-card__qr" />
           </article>

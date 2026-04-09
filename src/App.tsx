@@ -4,16 +4,24 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getAiAssessment } from "./ai";
 import { AiPalette } from "./AiPalette";
 import { BossModeOverlay } from "./BossModeOverlay";
-import { bossModeShortcut, homeQuickActions, sectionCatalog, sections, systemTools } from "./content";
+import {
+  bossModeShortcut,
+  homeQuickActions,
+  sectionCatalog,
+  sections,
+  systemTools,
+} from "./content";
 import { getBossModeViewState } from "./fakeUpdate";
 import { InfoDrawer } from "./InfoDrawer";
 import { useAppSettings } from "./hooks/useAppSettings";
 import { useResponsiveLayout } from "./hooks/useResponsiveLayout";
 import { AiPage } from "./pages/AiPage";
+import { ComponentsPage } from "./pages/ComponentsPage";
 import { EfficiencyPage } from "./pages/EfficiencyPage";
 import { HomePage } from "./pages/HomePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SystemPage } from "./pages/SystemPage";
+import { SupportModal } from "./SupportModal";
 import type {
   ActionId,
   AiChatResponse,
@@ -46,7 +54,7 @@ const startupInitialState: StartupState = {
   visible: true,
   progress: 8,
   title: "正在启动 Win Toolbox",
-  detail: "正在准备首页和基础界面。",
+  detail: "先把主界面准备好，稍后会继续读取当前机器和组件状态。",
 };
 
 const componentStageCatalog: Record<
@@ -55,7 +63,7 @@ const componentStageCatalog: Record<
 > = {
   install: [
     { progress: 16, label: "正在准备安装包" },
-    { progress: 46, label: "正在完成安装" },
+    { progress: 46, label: "正在解压文件" },
     { progress: 82, label: "正在写入组件信息" },
   ],
   repair: [
@@ -100,6 +108,7 @@ function App() {
   const [aiBusy, setAiBusy] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [supportModalOpen, setSupportModalOpen] = useState(false);
   const [bossMode, setBossMode] = useState(false);
   const [bossStartedAt, setBossStartedAt] = useState(0);
   const [bossState, setBossState] = useState<BossModeViewState>(getBossModeViewState(0));
@@ -207,9 +216,9 @@ function App() {
       if (showStartup) {
         setStartup({
           visible: true,
-          progress: 10,
+          progress: 12,
           title: "正在读取当前机器",
-          detail: "正在检查 CPU、内存、显卡和系统版本。",
+          detail: "先检查 CPU、内存、显卡和系统版本，让首页状态先显示出来。",
         });
       }
 
@@ -242,14 +251,14 @@ function App() {
           visible: true,
           progress: 100,
           title: "准备完成",
-          detail: "首页已经就绪，现在可以直接开始使用。",
+          detail: "主界面已经就绪，现在可以直接开始使用。",
         });
       }
     } finally {
       if (showStartup) {
         window.setTimeout(() => {
           setStartup((current) => ({ ...current, visible: false }));
-        }, 240);
+        }, 280);
       }
     }
   }
@@ -385,14 +394,12 @@ function App() {
     setBossMode(true);
     setPaletteOpen(false);
 
-    await Promise.all([
-      appWindow.setAlwaysOnTop(true),
-      appWindow.setFullscreen(true),
-      appWindow.setDecorations(false),
-      appWindow.setResizable(false),
-      appWindow.setCursorVisible(false),
-      appWindow.setContentProtected(true),
-    ]);
+    await appWindow.setDecorations(false);
+    await appWindow.setResizable(false);
+    await appWindow.setAlwaysOnTop(true);
+    await appWindow.setFullscreen(true);
+    await appWindow.setCursorVisible(false);
+    await appWindow.setContentProtected(true);
 
     pushToast(`已进入老板键，按 ${bossModeShortcut} 或 Esc 退出。`);
   }
@@ -401,14 +408,12 @@ function App() {
     const appWindow = getCurrentWindow();
     setBossMode(false);
 
-    await Promise.all([
-      appWindow.setAlwaysOnTop(false),
-      appWindow.setFullscreen(false),
-      appWindow.setDecorations(true),
-      appWindow.setResizable(true),
-      appWindow.setCursorVisible(true),
-      appWindow.setContentProtected(false),
-    ]);
+    await appWindow.setFullscreen(false);
+    await appWindow.setAlwaysOnTop(false);
+    await appWindow.setDecorations(true);
+    await appWindow.setResizable(true);
+    await appWindow.setCursorVisible(true);
+    await appWindow.setContentProtected(false);
   }
 
   useEffect(() => {
@@ -427,13 +432,13 @@ function App() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (!document.hidden && !bossMode) {
+      if (!document.hidden && !bossMode && !startup.visible) {
         void loadSnapshot();
       }
     }, 60_000);
 
     return () => window.clearInterval(timer);
-  }, [bossMode]);
+  }, [bossMode, startup.visible]);
 
   useEffect(() => {
     if (settings.captureHelperEnabled && !capturePlus?.installed) {
@@ -514,11 +519,10 @@ function App() {
             }}
           />
         );
-      case "efficiency":
+      case "components":
         return (
-          <EfficiencyPage
+          <ComponentsPage
             components={components}
-            hotspots={hotspots}
             busyState={componentBusyState}
             captureHelperEnabled={settings.captureHelperEnabled}
             onToggleCaptureHelper={(nextEnabled) => {
@@ -530,6 +534,15 @@ function App() {
             onLaunchComponent={(componentId) => {
               void launchComponent(componentId);
             }}
+            onOpenTarget={(target) => {
+              void openTarget(target);
+            }}
+          />
+        );
+      case "efficiency":
+        return (
+          <EfficiencyPage
+            hotspots={hotspots}
             onRefreshHotspots={() => {
               void loadHotspots();
             }}
@@ -575,6 +588,7 @@ function App() {
             onOpenTarget={(target) => {
               void openTarget(target);
             }}
+            onOpenSupportModal={() => setSupportModalOpen(true)}
           />
         );
       default:
@@ -605,7 +619,7 @@ function App() {
           </div>
 
           <p className="sidebar__summary">
-            高频动作留在首页，复杂能力收进二级页，打开就能直接用。
+            高频动作留在首页，安装增强工具放到组件中心，空间热点单独做成可视化页面。
           </p>
 
           <nav className="sidebar__nav">
@@ -635,8 +649,12 @@ function App() {
 
           <section className="sidebar__panel sidebar__panel--support">
             <p className="section-kicker">支持一下</p>
-            <p>赞助入口已经放回设置页里了。</p>
-            <button className="ghost-button" type="button" onClick={() => setActiveSection("settings")}>
+            <p>赞助入口已经恢复为弹窗显示，点击就能直接看到收款码。</p>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => setSupportModalOpen(true)}
+            >
               打开赞助码
             </button>
           </section>
@@ -661,19 +679,6 @@ function App() {
             </div>
           </header>
 
-          {startup.visible ? (
-            <section className="startup-banner">
-              <div className="startup-banner__head">
-                <strong>{startup.title}</strong>
-                <span>{startup.progress}%</span>
-              </div>
-              <p>{startup.detail}</p>
-              <div className="startup-progress">
-                <span style={{ width: `${startup.progress}%` }} />
-              </div>
-            </section>
-          ) : null}
-
           {snapshotError ? (
             <section className="banner banner--warning">
               <strong>读取系统快照失败</strong>
@@ -685,6 +690,23 @@ function App() {
         </main>
       </div>
 
+      {startup.visible ? (
+        <div className="startup-overlay">
+          <div className="startup-overlay__panel">
+            <p className="section-kicker">Starting Up</p>
+            <h2>{startup.title}</h2>
+            <p>{startup.detail}</p>
+            <div className="startup-overlay__progress-head">
+              <span>正在加载配置与组件状态</span>
+              <strong>{startup.progress}%</strong>
+            </div>
+            <div className="startup-progress">
+              <span style={{ width: `${startup.progress}%` }} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <InfoDrawer
         open={drawerOpen}
         snapshot={snapshot}
@@ -694,6 +716,8 @@ function App() {
           void openTarget(target);
         }}
       />
+
+      <SupportModal open={supportModalOpen} onClose={() => setSupportModalOpen(false)} />
 
       <AiPalette
         open={paletteOpen}

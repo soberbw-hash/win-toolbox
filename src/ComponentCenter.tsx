@@ -1,3 +1,4 @@
+import { getComponentIconPath } from "./componentIcons";
 import type {
   ComponentBusyState,
   ComponentManifest,
@@ -61,24 +62,25 @@ export function ComponentCenter({
           <h2>组件中心</h2>
         </div>
         <p className="section-copy">
-          一键安装常用增强工具。状态、来源、许可证和日志入口都收在这里。
+          装上常用增强工具，状态、版本、来源和日志入口都能在这里直接看到。
         </p>
       </div>
 
       {visibleItems.length === 0 ? (
-        <div className="empty-state">当前没有可展示的组件。</div>
+        <div className="empty-state">当前还没有可展示的组件。</div>
       ) : (
         <div className="component-grid">
           {visibleItems.map((item) => {
             const isBusy = busyState?.componentId === item.id;
             const primary = getPrimaryAction(item);
+            const iconPath = getComponentIconPath(item.id);
 
             return (
               <article key={item.id} className="soft-card component-card component-card--rich">
                 <div className="component-card__top">
                   <div className="component-card__title">
                     <span className={`component-card__icon ${getCategoryTone(item.category)}`}>
-                      {item.name.slice(0, 1)}
+                      {iconPath ? <img src={iconPath} alt="" /> : item.name.slice(0, 1)}
                     </span>
                     <div>
                       <h3>{item.name}</h3>
